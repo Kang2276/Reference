@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>애니메이션 레퍼런스 라이브러리</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="app">
+  <div class="topbar">
+    <h1>🎞 애니메이션 레퍼런스 라이브러리</h1>
+    <span class="sub" id="statTotal"></span>
+    <div class="search-box"><input id="searchInput" type="text" placeholder="제목·설명·태그 검색..."></div>
+    <div class="topbar-actions">
+      <button id="addBtn">＋ 추가</button>
+      <button id="exportBtn" title="내 상태/추가 항목 백업">내보내기</button>
+      <button id="importBtn" title="백업 파일 불러오기" onclick="document.getElementById('importInput').click()">가져오기</button>
+      <input type="file" id="importInput" accept="application/json" class="hidden">
+      <button id="themeBtn" title="테마 전환">🌓</button>
+    </div>
+  </div>
+  <div class="sidebar-col">
+    <div class="sidebar-header">
+      <button id="addCatBtn" title="새 카테고리 만들기">＋ 카테고리</button>
+    </div>
+    <div class="sidebar" id="sidebar"></div>
+  </div>
+  <div class="content" id="content"></div>
+</div>
+<div id="modalRoot"></div>
+
+<script src="data.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
