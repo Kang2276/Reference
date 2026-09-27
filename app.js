@@ -37,12 +37,14 @@
   // ── merge custom categories/subcategories into CATALOG ────────
   function applyCustomCategoryToCatalog(cc) {
     if (!cc.parentId) {
+      if (CATALOG.categories.some(c => c.id === cc.id)) return true;
       CATALOG.categories.push({ id: cc.id, name: cc.name, desc: cc.desc || "", items: [], subcategories: [] });
       return true;
     }
     const parent = CATALOG.categories.find(c => c.id === cc.parentId);
     if (!parent) return false;
     if (!parent.subcategories) parent.subcategories = [];
+    if (parent.subcategories.some(s => s.id === cc.id)) return true;
     parent.subcategories.push({ id: cc.id, name: cc.name, desc: cc.desc || "", items: [] });
     return true;
   }
@@ -704,7 +706,13 @@
 
   // ── export / import ────────────────────────────────────────
   $exportBtn.addEventListener("click", () => {
-    const payload = { itemState, customItems, hiddenItems: Array.from(hiddenItems), exportedAt: new Date().toISOString(), catalogVersion: CATALOG.updated };
+    const payload = {
+      itemState, customItems,
+      hiddenItems: Array.from(hiddenItems),
+      hiddenCats: Array.from(hiddenCats),
+      customCategories,
+      exportedAt: new Date().toISOString(), catalogVersion: CATALOG.updated,
+    };
     const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
     const a = document.createElement("a");
     a.href = URL.createObjectURL(blob);
@@ -722,7 +730,14 @@
         if (data.itemState) itemState = data.itemState;
         if (data.customItems) customItems = data.customItems;
         if (data.hiddenItems) hiddenItems = new Set(data.hiddenItems);
-        saveState(); saveCustom(); saveHidden();
+        if (data.hiddenCats) hiddenCats = new Set(data.hiddenCats);
+        if (data.customCategories) {
+          customCategories = data.customCategories;
+          customCategories.forEach(cc => { if (!cc.parentId && !nodes[cc.id]) registerCategoryNode(cc); });
+          customCategories.forEach(cc => { if (cc.parentId && !nodes[cc.id]) registerCategoryNode(cc); });
+          customCategories.forEach(cc => applyCustomCategoryToCatalog(cc));
+        }
+        saveState(); saveCustom(); saveHidden(); saveHiddenCats(); saveCustomCategories();
         renderAll();
         alert("가져오기 완료.");
       } catch (err) { alert("파일을 읽을 수 없습니다: " + err.message); }
