@@ -212,6 +212,7 @@ input:focus, select:focus, textarea:focus { outline: 1px solid var(--accent); }
 .card-actions { display: flex; gap: 4px; }
 .icon-btn { padding: 4px 7px; font-size: 12px; line-height: 1; }
 .icon-btn.on { color: var(--accent-2); border-color: var(--accent-2); }
+.icon-btn.restore-btn { color: var(--ok); border-color: var(--ok); }
 .custom-tag { font-size: 10px; color: var(--ok); border: 1px solid var(--ok); padding: 1px 6px; border-radius: 999px; }
 
 .empty-state { text-align: center; color: var(--text-faint); padding: 60px 20px; font-size: 13px; }

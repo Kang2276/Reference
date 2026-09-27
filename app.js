@@ -11,6 +11,7 @@
   const LS_THUMB = "animLib.thumbCache"; // { [url]: youtube thumbnail_url } — playlist oEmbed results
   const LS_CUSTOM_CATS = "animLib.customCategories"; // [ {id, name, desc, parentId} ]
   const TRASH_ID = "trash"; // reserved top-level category id: holds categories removed via the UI
+  const TRASH_ITEMS_ID = "trash-items"; // reserved sub-category under trash: holds individually-deleted items
 
   let itemState = loadJSON(LS_STATE, {});
   let customItems = loadJSON(LS_CUSTOM, []);
@@ -20,6 +21,10 @@
   let customCategories = loadJSON(LS_CUSTOM_CATS, []);
   if (!customCategories.some(cc => cc.id === TRASH_ID)) {
     customCategories.push({ id: TRASH_ID, name: "🗑 휴지통", desc: "삭제된 카테고리 보관함", parentId: null });
+    saveJSON(LS_CUSTOM_CATS, customCategories);
+  }
+  if (!customCategories.some(cc => cc.id === TRASH_ITEMS_ID)) {
+    customCategories.push({ id: TRASH_ITEMS_ID, name: "개별 삭제된 항목", desc: "카테고리와 상관없이 개별적으로 삭제된 레퍼런스", parentId: TRASH_ID });
     saveJSON(LS_CUSTOM_CATS, customCategories);
   }
 
@@ -212,25 +217,72 @@
   }
 
   // ── permanently delete everything currently sitting in trash ──
+  // (the TRASH_ITEMS_ID bucket itself is a permanent fixture: only its contents are purged)
   function emptyTrash() {
     const trashNode = nodes[TRASH_ID];
-    if (!trashNode || !trashNode.subIds.length) { alert("휴지통이 비어 있습니다."); return; }
-    const idsToPurge = trashNode.subIds.slice();
-    const affected = allMergedItems().filter(it => it._cat === TRASH_ID && idsToPurge.includes(it._sub)).length;
-    if (!confirm(`휴지통에 있는 카테고리 ${idsToPurge.length}개와 항목 ${affected}개를 영구 삭제하시겠습니까?\n이 작업은 되돌릴 수 없습니다.`)) return;
+    if (!trashNode) return;
+    const idsToPurge = trashNode.subIds.filter(id => id !== TRASH_ITEMS_ID);
+    const looseItemCount = customItems.filter(it => it.catId === TRASH_ID && it.subId === TRASH_ITEMS_ID).length;
+    const categoryItemCount = allMergedItems().filter(it => it._cat === TRASH_ID && idsToPurge.includes(it._sub)).length;
+    const totalAffected = looseItemCount + categoryItemCount;
+    if (!idsToPurge.length && !looseItemCount) { alert("휴지통이 비어 있습니다."); return; }
+    if (!confirm(`휴지통에 있는 카테고리 ${idsToPurge.length}개와 항목 ${totalAffected}개를 영구 삭제하시겠습니까?\n이 작업은 되돌릴 수 없습니다.`)) return;
 
+    customItems = customItems.filter(it => !(it.catId === TRASH_ID && it.subId === TRASH_ITEMS_ID));
     customItems = customItems.filter(it => !(it.catId === TRASH_ID && idsToPurge.includes(it.subId)));
 
     const trashCatalog = CATALOG.categories.find(c => c.id === TRASH_ID);
-    if (trashCatalog) trashCatalog.subcategories = [];
+    if (trashCatalog && trashCatalog.subcategories) {
+      trashCatalog.subcategories = trashCatalog.subcategories.filter(s => s.id === TRASH_ITEMS_ID);
+    }
     idsToPurge.forEach(rid => { delete nodes[rid]; hiddenCats.delete(rid); });
-    trashNode.subIds = [];
+    trashNode.subIds = trashNode.subIds.filter(id => id === TRASH_ITEMS_ID);
 
     customCategories = customCategories.filter(cc => !(cc.parentId === TRASH_ID && idsToPurge.includes(cc.id)));
 
     if (idsToPurge.includes(ui.selSub)) { ui.selCat = null; ui.selSub = null; }
 
     saveCustom(); saveCustomCategories(); saveHiddenCats();
+    renderAll();
+  }
+
+  // ── move a single item to trash (default item: hide original + trash copy; custom item: relocate) ──
+  function moveItemToTrash(it, key) {
+    if (it.custom) {
+      const existing = customItems.find(c => c.id === it.customId);
+      if (!existing) return;
+      existing.trashedFrom = { catId: existing.catId, subId: existing.subId || null };
+      existing.catId = TRASH_ID;
+      existing.subId = TRASH_ITEMS_ID;
+    } else {
+      hiddenItems.add(key);
+      customItems.push({
+        id: "c" + Date.now() + Math.random().toString(36).slice(2, 7),
+        t: it.t, u: it.u, s: it.s, tags: it.tags, d: it.d, thumb: it.thumb || undefined,
+        catId: TRASH_ID, subId: TRASH_ITEMS_ID,
+        trashedFrom: { catId: it._cat, subId: it._sub || null },
+        trashedOriginalKey: key,
+      });
+      saveHidden();
+    }
+    saveCustom();
+    renderAll();
+  }
+
+  // ── restore a trashed item back to where it came from ──
+  function restoreItem(customId) {
+    const it = customItems.find(c => c.id === customId);
+    if (!it || !it.trashedFrom) return;
+    if (it.trashedOriginalKey) {
+      hiddenItems.delete(it.trashedOriginalKey);
+      customItems = customItems.filter(c => c.id !== customId);
+      saveHidden();
+    } else {
+      it.catId = it.trashedFrom.catId;
+      it.subId = it.trashedFrom.subId;
+      delete it.trashedFrom;
+    }
+    saveCustom();
     renderAll();
   }
 
@@ -259,6 +311,7 @@
     activeTag: null,
     openCats: new Set(CATALOG.categories.map(c => c.id)), // sidebar expand state
   };
+  let renderedByKey = new Map(); // itemKey -> item, refreshed on every renderContent() call
 
   // ── DOM refs ────────────────────────────────────────────────
   const $sidebar = document.getElementById("sidebar");
@@ -469,6 +522,7 @@
       html += `<div class="grid">` + filtered.map(cardHtml).join("") + `</div>`;
     }
 
+    renderedByKey = new Map(filtered.map(it => [itemKey(it), it]));
     $content.innerHTML = html;
     wireContentEvents();
   }
@@ -519,9 +573,11 @@
           <button class="icon-btn watch-btn ${st.watched ? "on" : ""}" title="확인함">${st.watched ? "✔ 확인함" : "확인"}</button>
         </div>
         <div class="card-actions">
-          <button class="icon-btn move-btn" title="다른 카테고리로 이동">➜ 이동</button>
-          ${it.custom ? `<button class="icon-btn edit-btn" data-id="${it.customId}" title="편집">✎</button><button class="icon-btn danger del-btn" data-id="${it.customId}" title="삭제">🗑 삭제</button>`
-                        : `<button class="icon-btn danger hide-btn" title="삭제">🗑 삭제</button>`}
+          ${it._cat === TRASH_ID
+            ? `<button class="icon-btn restore-btn" data-id="${it.customId}" title="원래 카테고리로 복구">↩ 복구</button>`
+            : `<button class="icon-btn move-btn" title="다른 카테고리로 이동">➜ 이동</button>`
+              + (it.custom ? `<button class="icon-btn edit-btn" data-id="${it.customId}" title="편집">✎</button><button class="icon-btn danger del-btn" data-id="${it.customId}" title="삭제">🗑 삭제</button>`
+                            : `<button class="icon-btn danger hide-btn" title="삭제">🗑 삭제</button>`)}
         </div>
       </div>
     </div>`;
@@ -590,24 +646,26 @@
       const editBtn = card.querySelector(".edit-btn");
       const delBtn = card.querySelector(".del-btn");
       const moveBtn = card.querySelector(".move-btn");
+      const restoreBtn = card.querySelector(".restore-btn");
       const note = card.querySelector(".card-note textarea");
 
       if (favBtn) favBtn.addEventListener("click", () => { setState(url, { favorite: !getState(url).favorite }); renderContent(); });
       if (watchBtn) watchBtn.addEventListener("click", () => { setState(url, { watched: !getState(url).watched }); renderContent(); });
       if (hideBtn) hideBtn.addEventListener("click", () => {
-        if (confirm("이 레퍼런스를 삭제할까요? 되돌릴 수 없습니다.")) {
-          hiddenItems.add(key); saveHidden(); renderAll();
+        if (confirm("이 레퍼런스를 휴지통으로 이동할까요?")) {
+          const it = renderedByKey.get(key);
+          if (it) moveItemToTrash(it, key);
         }
       });
       if (moveBtn) moveBtn.addEventListener("click", () => openMoveModal(key));
       if (editBtn) editBtn.addEventListener("click", () => openItemModal(customItems.find(c => c.id === editBtn.getAttribute("data-id"))));
       if (delBtn) delBtn.addEventListener("click", () => {
-        if (confirm("이 항목을 삭제할까요? 되돌릴 수 없습니다.")) {
-          customItems = customItems.filter(c => c.id !== delBtn.getAttribute("data-id"));
-          hiddenItems.delete(key);
-          saveCustom(); saveHidden(); renderAll();
+        if (confirm("이 항목을 휴지통으로 이동할까요?")) {
+          const it = renderedByKey.get(key);
+          if (it) moveItemToTrash(it, key);
         }
       });
+      if (restoreBtn) restoreBtn.addEventListener("click", () => restoreItem(restoreBtn.getAttribute("data-id")));
       if (note) {
         let t;
         note.addEventListener("input", () => {
@@ -671,7 +729,11 @@
       const [catId, subId] = sel.value.split("|");
       if (it.custom) {
         const c = customItems.find(x => x.id === it.customId);
-        if (c) { c.catId = catId; c.subId = subId || null; saveCustom(); }
+        if (c) {
+          c.catId = catId; c.subId = subId || null;
+          delete c.trashedFrom; delete c.trashedOriginalKey;
+          saveCustom();
+        }
       } else {
         hiddenItems.add(key);
         saveHidden();
