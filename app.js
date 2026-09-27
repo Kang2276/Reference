@@ -10,6 +10,7 @@
   const LS_THEME = "animLib.theme";
   const LS_THUMB = "animLib.thumbCache"; // { [url]: youtube thumbnail_url } — playlist oEmbed results
   const LS_CUSTOM_CATS = "animLib.customCategories"; // [ {id, name, desc, parentId} ]
+  const TRASH_ID = "trash"; // reserved top-level category id: holds categories removed via the UI
 
   let itemState = loadJSON(LS_STATE, {});
   let customItems = loadJSON(LS_CUSTOM, []);
@@ -17,6 +18,10 @@
   let hiddenCats = new Set(loadJSON(LS_HIDDEN_CATS, []));
   let thumbCache = loadJSON(LS_THUMB, {});
   let customCategories = loadJSON(LS_CUSTOM_CATS, []);
+  if (!customCategories.some(cc => cc.id === TRASH_ID)) {
+    customCategories.push({ id: TRASH_ID, name: "🗑 휴지통", desc: "삭제된 카테고리 보관함", parentId: null });
+    saveJSON(LS_CUSTOM_CATS, customCategories);
+  }
 
   function loadJSON(key, fallback) {
     try {
@@ -139,22 +144,33 @@
     }
   }
 
-  // ── delete a custom category (and its custom sub-categories/items) ──
-  function deleteCustomCategory(id) {
+  // ── move a custom category (and its custom sub-categories/items) to trash ──
+  function moveCategoryToTrash(id) {
+    if (id === TRASH_ID) return;
     const node = nodes[id];
     if (!node) return;
-    const idsToRemove = [id];
-    customCategories.forEach(cc => { if (cc.parentId === id) idsToRemove.push(cc.id); });
+    const idsToMove = [id];
+    if (node.isTop) {
+      customCategories.forEach(cc => { if (cc.parentId === id) idsToMove.push(cc.id); });
+    }
 
-    const affected = allMergedItems().filter(it => idsToRemove.includes(it._cat) || (it._sub && idsToRemove.includes(it._sub))).length;
-    const msg = `"${node.name}" 카테고리를 삭제하시겠습니까?` + (affected ? `\n이 안에 있는 항목 ${affected}개도 함께 삭제됩니다.` : "");
+    const affected = allMergedItems().filter(it => idsToMove.includes(it._cat) || (it._sub && idsToMove.includes(it._sub))).length;
+    const msg = `"${node.name}" 카테고리를 휴지통으로 이동하시겠습니까?` + (affected ? `\n안에 있는 항목 ${affected}개도 함께 이동됩니다.` : "");
     if (!confirm(msg)) return;
 
-    customItems = customItems.filter(it => !idsToRemove.includes(it.catId) && !(it.subId && idsToRemove.includes(it.subId)));
-
-    idsToRemove.forEach(rid => {
+    const trashCatalog = CATALOG.categories.find(c => c.id === TRASH_ID);
+    idsToMove.forEach(rid => {
       const n = nodes[rid];
       if (!n) return;
+
+      // remap items to their new (trash, rid) address before detaching
+      if (n.isTop) {
+        customItems.forEach(it => { if (it.catId === rid && !it.subId) { it.catId = TRASH_ID; it.subId = rid; } });
+      } else {
+        customItems.forEach(it => { if (it.catId === n.parent && it.subId === rid) { it.catId = TRASH_ID; } });
+      }
+
+      // detach from its current position
       if (n.isTop) {
         const idx = CATALOG.categories.findIndex(c => c.id === rid);
         if (idx !== -1) CATALOG.categories.splice(idx, 1);
@@ -170,15 +186,49 @@
           if (idx2 !== -1) parentNode.subIds.splice(idx2, 1);
         }
       }
-      delete nodes[rid];
       hiddenCats.delete(rid);
+
+      // re-attach as a sub-category under trash
+      if (trashCatalog) {
+        if (!trashCatalog.subcategories) trashCatalog.subcategories = [];
+        if (!trashCatalog.subcategories.some(s => s.id === rid)) {
+          trashCatalog.subcategories.push({ id: rid, name: n.name, desc: n.desc || "", items: [] });
+        }
+      }
+      nodes[rid] = { id: rid, name: n.name, icon: "", desc: n.desc || "", guide: null, noGuide: false, isTop: false, parent: TRASH_ID };
+      if (!nodes[TRASH_ID].subIds.includes(rid)) nodes[TRASH_ID].subIds.push(rid);
+
+      const ccEntry = customCategories.find(cc => cc.id === rid);
+      if (ccEntry) ccEntry.parentId = TRASH_ID;
+      else customCategories.push({ id: rid, name: n.name, desc: n.desc || "", parentId: TRASH_ID });
     });
 
-    customCategories = customCategories.filter(cc => !idsToRemove.includes(cc.id));
-
-    if (idsToRemove.includes(ui.selCat) || (ui.selSub && idsToRemove.includes(ui.selSub))) {
+    if (idsToMove.includes(ui.selCat) || (ui.selSub && idsToMove.includes(ui.selSub))) {
       ui.selCat = null; ui.selSub = null;
     }
+
+    saveCustom(); saveCustomCategories(); saveHiddenCats();
+    renderAll();
+  }
+
+  // ── permanently delete everything currently sitting in trash ──
+  function emptyTrash() {
+    const trashNode = nodes[TRASH_ID];
+    if (!trashNode || !trashNode.subIds.length) { alert("휴지통이 비어 있습니다."); return; }
+    const idsToPurge = trashNode.subIds.slice();
+    const affected = allMergedItems().filter(it => it._cat === TRASH_ID && idsToPurge.includes(it._sub)).length;
+    if (!confirm(`휴지통에 있는 카테고리 ${idsToPurge.length}개와 항목 ${affected}개를 영구 삭제하시겠습니까?\n이 작업은 되돌릴 수 없습니다.`)) return;
+
+    customItems = customItems.filter(it => !(it.catId === TRASH_ID && idsToPurge.includes(it.subId)));
+
+    const trashCatalog = CATALOG.categories.find(c => c.id === TRASH_ID);
+    if (trashCatalog) trashCatalog.subcategories = [];
+    idsToPurge.forEach(rid => { delete nodes[rid]; hiddenCats.delete(rid); });
+    trashNode.subIds = [];
+
+    customCategories = customCategories.filter(cc => !(cc.parentId === TRASH_ID && idsToPurge.includes(cc.id)));
+
+    if (idsToPurge.includes(ui.selSub)) { ui.selCat = null; ui.selSub = null; }
 
     saveCustom(); saveCustomCategories(); saveHiddenCats();
     renderAll();
@@ -249,24 +299,26 @@
       const open = ui.openCats.has(cat.id);
       const activeTop = ui.selCat === cat.id && !ui.selSub;
       const catChecked = !hiddenCats.has(cat.id);
-      const catIsCustom = customCategories.some(cc => cc.id === cat.id);
+      const isTrashRoot = cat.id === TRASH_ID;
+      const catIsCustom = !isTrashRoot && customCategories.some(cc => cc.id === cat.id);
       html += `<div class="cat-node">`;
       html += `<div class="cat-row ${activeTop ? "active" : ""}" data-cat="${cat.id}">`
         + `<input type="checkbox" class="cat-check" data-catid="${cat.id}" ${catChecked ? "checked" : ""} title="체크 해제 시 이 카테고리 전체 숨김">`
         + (cat.subcategories && cat.subcategories.length ? `<span class="caret ${open ? "open" : ""}" data-toggle="${cat.id}">▶</span>` : `<span class="caret"></span>`)
         + `<span class="name">${cat.name}</span><span class="count">${countFor(cat.id)}</span>`
-        + (catIsCustom ? `<button class="icon-btn cat-del" data-catdel="${cat.id}" title="카테고리 삭제">🗑</button>` : "")
+        + (catIsCustom ? `<button class="icon-btn cat-del" data-catdel="${cat.id}" title="카테고리 삭제(휴지통으로 이동)">🗑</button>` : "")
+        + (isTrashRoot ? `<button class="icon-btn cat-empty-trash" data-empty-trash="1" title="휴지통 비우기(영구 삭제)">비우기</button>` : "")
         + `</div>`;
       if (cat.subcategories && cat.subcategories.length) {
         html += `<div class="sub-list ${open ? "" : "hidden"}">`;
         cat.subcategories.forEach(sub => {
           const activeSub = ui.selCat === cat.id && ui.selSub === sub.id;
           const subChecked = !hiddenCats.has(sub.id);
-          const subIsCustom = customCategories.some(cc => cc.id === sub.id);
+          const subIsCustom = !isTrashRoot && customCategories.some(cc => cc.id === sub.id);
           html += `<div class="cat-row ${activeSub ? "active" : ""}" data-cat="${cat.id}" data-sub="${sub.id}">`
             + `<input type="checkbox" class="cat-check" data-catid="${sub.id}" ${subChecked ? "checked" : ""} title="체크 해제 시 이 카테고리 숨김">`
             + `<span class="caret"></span><span class="name">${sub.name}</span><span class="count">${countFor(cat.id, sub.id)}</span>`
-            + (subIsCustom ? `<button class="icon-btn cat-del" data-catdel="${sub.id}" title="카테고리 삭제">🗑</button>` : "")
+            + (subIsCustom ? `<button class="icon-btn cat-del" data-catdel="${sub.id}" title="카테고리 삭제(휴지통으로 이동)">🗑</button>` : "")
             + `</div>`;
         });
         html += `</div>`;
@@ -294,7 +346,13 @@
     $sidebar.querySelectorAll(".cat-del").forEach(el => {
       el.addEventListener("click", (e) => {
         e.stopPropagation();
-        deleteCustomCategory(el.getAttribute("data-catdel"));
+        moveCategoryToTrash(el.getAttribute("data-catdel"));
+      });
+    });
+    $sidebar.querySelectorAll(".cat-empty-trash").forEach(el => {
+      el.addEventListener("click", (e) => {
+        e.stopPropagation();
+        emptyTrash();
       });
     });
     $sidebar.querySelectorAll("[data-toggle]").forEach(el => {
@@ -577,6 +635,7 @@
   function allCatOptions() {
     let opts = "";
     CATALOG.categories.forEach(cat => {
+      if (cat.id === TRASH_ID) return;
       opts += `<option value="${cat.id}|">${cat.name}</option>`;
       (cat.subcategories || []).forEach(sub => {
         opts += `<option value="${cat.id}|${sub.id}">　└ ${sub.name}</option>`;
@@ -629,7 +688,7 @@
   }
 
   function openAddCategoryModal() {
-    const parentOptions = CATALOG.categories.map(cat => `<option value="${cat.id}">${cat.name}</option>`).join("");
+    const parentOptions = CATALOG.categories.filter(cat => cat.id !== TRASH_ID).map(cat => `<option value="${cat.id}">${cat.name}</option>`).join("");
     const modalHtml = `
     <div class="modal-backdrop" id="modalBackdrop">
       <div class="modal">
