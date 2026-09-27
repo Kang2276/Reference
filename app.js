@@ -203,14 +203,79 @@
       nodes[rid] = { id: rid, name: n.name, icon: "", desc: n.desc || "", guide: null, noGuide: false, isTop: false, parent: TRASH_ID };
       if (!nodes[TRASH_ID].subIds.includes(rid)) nodes[TRASH_ID].subIds.push(rid);
 
+      // remember where it came from so it can be restored later
+      const restoreWasTop = n.isTop;
+      const restoreParentId = n.isTop ? null : n.parent;
       const ccEntry = customCategories.find(cc => cc.id === rid);
-      if (ccEntry) ccEntry.parentId = TRASH_ID;
-      else customCategories.push({ id: rid, name: n.name, desc: n.desc || "", parentId: TRASH_ID });
+      if (ccEntry) {
+        ccEntry.parentId = TRASH_ID;
+        ccEntry.restoreWasTop = restoreWasTop;
+        ccEntry.restoreParentId = restoreParentId;
+      } else {
+        customCategories.push({ id: rid, name: n.name, desc: n.desc || "", parentId: TRASH_ID, restoreWasTop, restoreParentId });
+      }
     });
 
     if (idsToMove.includes(ui.selCat) || (ui.selSub && idsToMove.includes(ui.selSub))) {
       ui.selCat = null; ui.selSub = null;
     }
+
+    saveCustom(); saveCustomCategories(); saveHiddenCats();
+    renderAll();
+  }
+
+  // ── restore a trashed category (and any items in it) back to where it was ──
+  function restoreCategory(id) {
+    if (id === TRASH_ITEMS_ID) return;
+    const entry = customCategories.find(cc => cc.id === id && cc.parentId === TRASH_ID);
+    if (!entry) return;
+
+    // if its original parent is itself still sitting in trash, restore that first
+    const wantedParentId = entry.restoreWasTop ? null : entry.restoreParentId;
+    if (wantedParentId && customCategories.some(cc => cc.id === wantedParentId && cc.parentId === TRASH_ID)) {
+      restoreCategory(wantedParentId);
+    }
+    const finalParentId = (wantedParentId && nodes[wantedParentId] && nodes[wantedParentId].isTop) ? wantedParentId : null;
+
+    // detach from trash
+    const trashCatalog = CATALOG.categories.find(c => c.id === TRASH_ID);
+    if (trashCatalog && trashCatalog.subcategories) {
+      const idx = trashCatalog.subcategories.findIndex(s => s.id === id);
+      if (idx !== -1) trashCatalog.subcategories.splice(idx, 1);
+    }
+    const trashNode = nodes[TRASH_ID];
+    if (trashNode) {
+      const idx2 = trashNode.subIds.indexOf(id);
+      if (idx2 !== -1) trashNode.subIds.splice(idx2, 1);
+    }
+
+    // remap items sitting in this bucket to the restored location
+    customItems.forEach(it => {
+      if (it.catId === TRASH_ID && it.subId === id) {
+        if (finalParentId) { it.catId = finalParentId; it.subId = id; }
+        else { it.catId = id; it.subId = null; }
+      }
+    });
+
+    // re-attach at the restored position
+    if (finalParentId) {
+      nodes[id] = { id, name: entry.name, icon: "", desc: entry.desc || "", guide: null, noGuide: false, isTop: false, parent: finalParentId };
+      const parentCatalog = CATALOG.categories.find(c => c.id === finalParentId);
+      if (parentCatalog) {
+        if (!parentCatalog.subcategories) parentCatalog.subcategories = [];
+        parentCatalog.subcategories.push({ id, name: entry.name, desc: entry.desc || "", items: [] });
+      }
+      if (nodes[finalParentId] && !nodes[finalParentId].subIds.includes(id)) nodes[finalParentId].subIds.push(id);
+    } else {
+      nodes[id] = { id, name: entry.name, icon: "", desc: entry.desc || "", guide: null, noGuide: false, isTop: true, subIds: [] };
+      CATALOG.categories.push({ id, name: entry.name, desc: entry.desc || "", items: [], subcategories: [] });
+    }
+
+    entry.parentId = finalParentId;
+    delete entry.restoreWasTop;
+    delete entry.restoreParentId;
+
+    if (ui.selCat === TRASH_ID && ui.selSub === id) { ui.selCat = null; ui.selSub = null; }
 
     saveCustom(); saveCustomCategories(); saveHiddenCats();
     renderAll();
@@ -272,18 +337,26 @@
   // ── restore a trashed item back to where it came from ──
   function restoreItem(customId) {
     const it = customItems.find(c => c.id === customId);
-    if (!it || !it.trashedFrom) return;
-    if (it.trashedOriginalKey) {
-      hiddenItems.delete(it.trashedOriginalKey);
-      customItems = customItems.filter(c => c.id !== customId);
-      saveHidden();
-    } else {
-      it.catId = it.trashedFrom.catId;
-      it.subId = it.trashedFrom.subId;
-      delete it.trashedFrom;
+    if (!it) return;
+    if (it.trashedFrom) {
+      // individually-deleted item (moveItemToTrash)
+      if (it.trashedOriginalKey) {
+        hiddenItems.delete(it.trashedOriginalKey);
+        customItems = customItems.filter(c => c.id !== customId);
+        saveHidden();
+      } else {
+        it.catId = it.trashedFrom.catId;
+        it.subId = it.trashedFrom.subId;
+        delete it.trashedFrom;
+      }
+      saveCustom();
+      renderAll();
+      return;
     }
-    saveCustom();
-    renderAll();
+    if (it.catId === TRASH_ID && it.subId && it.subId !== TRASH_ITEMS_ID) {
+      // item ended up here because its whole category was deleted — restore the category
+      restoreCategory(it.subId);
+    }
   }
 
   function allMergedItems() {
@@ -368,10 +441,12 @@
           const activeSub = ui.selCat === cat.id && ui.selSub === sub.id;
           const subChecked = !hiddenCats.has(sub.id);
           const subIsCustom = !isTrashRoot && customCategories.some(cc => cc.id === sub.id);
+          const subIsRestorable = isTrashRoot && sub.id !== TRASH_ITEMS_ID;
           html += `<div class="cat-row ${activeSub ? "active" : ""}" data-cat="${cat.id}" data-sub="${sub.id}">`
             + `<input type="checkbox" class="cat-check" data-catid="${sub.id}" ${subChecked ? "checked" : ""} title="체크 해제 시 이 카테고리 숨김">`
             + `<span class="caret"></span><span class="name">${sub.name}</span><span class="count">${countFor(cat.id, sub.id)}</span>`
             + (subIsCustom ? `<button class="icon-btn cat-del" data-catdel="${sub.id}" title="카테고리 삭제(휴지통으로 이동)">🗑</button>` : "")
+            + (subIsRestorable ? `<button class="icon-btn restore-cat-btn" data-restorecat="${sub.id}" title="카테고리 복구">♻ 복구</button>` : "")
             + `</div>`;
         });
         html += `</div>`;
@@ -400,6 +475,12 @@
       el.addEventListener("click", (e) => {
         e.stopPropagation();
         moveCategoryToTrash(el.getAttribute("data-catdel"));
+      });
+    });
+    $sidebar.querySelectorAll(".restore-cat-btn").forEach(el => {
+      el.addEventListener("click", (e) => {
+        e.stopPropagation();
+        restoreCategory(el.getAttribute("data-restorecat"));
       });
     });
     $sidebar.querySelectorAll(".cat-empty-trash").forEach(el => {

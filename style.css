@@ -127,6 +127,8 @@ input:focus, select:focus, textarea:focus { outline: 1px solid var(--accent); }
 .cat-row .cat-del:hover { opacity: 1; border-color: var(--danger); color: var(--danger); }
 .cat-row .cat-empty-trash { padding: 2px 8px; font-size: 11px; flex-shrink: 0; color: var(--danger); border-color: var(--danger); }
 .cat-row .cat-empty-trash:hover { background: var(--danger); color: #fff; }
+.cat-row .restore-cat-btn { padding: 2px 8px; font-size: 11px; flex-shrink: 0; color: var(--ok); border-color: var(--ok); }
+.cat-row .restore-cat-btn:hover { background: var(--ok); color: #0c1220; }
 .cat-row .caret { font-size: 10px; color: var(--text-faint); width: 12px; text-align: center; transition: transform .15s; }
 .cat-row .caret.open { transform: rotate(90deg); }
 .sub-list { margin-left: 14px; border-left: 1px dashed var(--border); padding-left: 6px; }
