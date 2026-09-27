@@ -675,7 +675,7 @@
       <div class="modal video-modal">
         <button class="icon-btn video-modal-close" id="videoModalClose" title="닫기">✕</button>
         <div class="video-modal-frame">
-          <iframe src="${escapeAttr(src)}" title="video player" frameborder="0"
+          <iframe src="${escapeAttr(src)}" title="video player" frameborder="0" referrerpolicy="no-referrer"
             allow="autoplay; encrypted-media; picture-in-picture; clipboard-write; web-share" allowfullscreen></iframe>
         </div>
       </div>
