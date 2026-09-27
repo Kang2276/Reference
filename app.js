@@ -139,6 +139,51 @@
     }
   }
 
+  // ── delete a custom category (and its custom sub-categories/items) ──
+  function deleteCustomCategory(id) {
+    const node = nodes[id];
+    if (!node) return;
+    const idsToRemove = [id];
+    customCategories.forEach(cc => { if (cc.parentId === id) idsToRemove.push(cc.id); });
+
+    const affected = allMergedItems().filter(it => idsToRemove.includes(it._cat) || (it._sub && idsToRemove.includes(it._sub))).length;
+    const msg = `"${node.name}" 카테고리를 삭제하시겠습니까?` + (affected ? `\n이 안에 있는 항목 ${affected}개도 함께 삭제됩니다.` : "");
+    if (!confirm(msg)) return;
+
+    customItems = customItems.filter(it => !idsToRemove.includes(it.catId) && !(it.subId && idsToRemove.includes(it.subId)));
+
+    idsToRemove.forEach(rid => {
+      const n = nodes[rid];
+      if (!n) return;
+      if (n.isTop) {
+        const idx = CATALOG.categories.findIndex(c => c.id === rid);
+        if (idx !== -1) CATALOG.categories.splice(idx, 1);
+      } else {
+        const parent = CATALOG.categories.find(c => c.id === n.parent);
+        if (parent && parent.subcategories) {
+          const idx = parent.subcategories.findIndex(s => s.id === rid);
+          if (idx !== -1) parent.subcategories.splice(idx, 1);
+        }
+        const parentNode = nodes[n.parent];
+        if (parentNode && parentNode.subIds) {
+          const idx2 = parentNode.subIds.indexOf(rid);
+          if (idx2 !== -1) parentNode.subIds.splice(idx2, 1);
+        }
+      }
+      delete nodes[rid];
+      hiddenCats.delete(rid);
+    });
+
+    customCategories = customCategories.filter(cc => !idsToRemove.includes(cc.id));
+
+    if (idsToRemove.includes(ui.selCat) || (ui.selSub && idsToRemove.includes(ui.selSub))) {
+      ui.selCat = null; ui.selSub = null;
+    }
+
+    saveCustom(); saveCustomCategories(); saveHiddenCats();
+    renderAll();
+  }
+
   function allMergedItems() {
     return allItems.concat(customItems.map(c => ({
       t: c.t, u: c.u, s: c.s, tags: c.tags || [], d: c.d || "", thumb: c.thumb || null,
@@ -204,20 +249,25 @@
       const open = ui.openCats.has(cat.id);
       const activeTop = ui.selCat === cat.id && !ui.selSub;
       const catChecked = !hiddenCats.has(cat.id);
+      const catIsCustom = customCategories.some(cc => cc.id === cat.id);
       html += `<div class="cat-node">`;
       html += `<div class="cat-row ${activeTop ? "active" : ""}" data-cat="${cat.id}">`
         + `<input type="checkbox" class="cat-check" data-catid="${cat.id}" ${catChecked ? "checked" : ""} title="체크 해제 시 이 카테고리 전체 숨김">`
         + (cat.subcategories && cat.subcategories.length ? `<span class="caret ${open ? "open" : ""}" data-toggle="${cat.id}">▶</span>` : `<span class="caret"></span>`)
         + `<span class="name">${cat.name}</span><span class="count">${countFor(cat.id)}</span>`
+        + (catIsCustom ? `<button class="icon-btn cat-del" data-catdel="${cat.id}" title="카테고리 삭제">🗑</button>` : "")
         + `</div>`;
       if (cat.subcategories && cat.subcategories.length) {
         html += `<div class="sub-list ${open ? "" : "hidden"}">`;
         cat.subcategories.forEach(sub => {
           const activeSub = ui.selCat === cat.id && ui.selSub === sub.id;
           const subChecked = !hiddenCats.has(sub.id);
+          const subIsCustom = customCategories.some(cc => cc.id === sub.id);
           html += `<div class="cat-row ${activeSub ? "active" : ""}" data-cat="${cat.id}" data-sub="${sub.id}">`
             + `<input type="checkbox" class="cat-check" data-catid="${sub.id}" ${subChecked ? "checked" : ""} title="체크 해제 시 이 카테고리 숨김">`
-            + `<span class="caret"></span><span class="name">${sub.name}</span><span class="count">${countFor(cat.id, sub.id)}</span></div>`;
+            + `<span class="caret"></span><span class="name">${sub.name}</span><span class="count">${countFor(cat.id, sub.id)}</span>`
+            + (subIsCustom ? `<button class="icon-btn cat-del" data-catdel="${sub.id}" title="카테고리 삭제">🗑</button>` : "")
+            + `</div>`;
         });
         html += `</div>`;
       }
@@ -239,6 +289,12 @@
         }
         saveHiddenCats();
         renderAll();
+      });
+    });
+    $sidebar.querySelectorAll(".cat-del").forEach(el => {
+      el.addEventListener("click", (e) => {
+        e.stopPropagation();
+        deleteCustomCategory(el.getAttribute("data-catdel"));
       });
     });
     $sidebar.querySelectorAll("[data-toggle]").forEach(el => {
