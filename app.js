@@ -732,10 +732,38 @@
         if (data.hiddenItems) hiddenItems = new Set(data.hiddenItems);
         if (data.hiddenCats) hiddenCats = new Set(data.hiddenCats);
         if (data.customCategories) {
-          customCategories = data.customCategories;
-          customCategories.forEach(cc => { if (!cc.parentId && !nodes[cc.id]) registerCategoryNode(cc); });
-          customCategories.forEach(cc => { if (cc.parentId && !nodes[cc.id]) registerCategoryNode(cc); });
-          customCategories.forEach(cc => applyCustomCategoryToCatalog(cc));
+          // merge: reuse an existing category (default or custom) with the same
+          // name+parent instead of creating a duplicate; only add ones with no match.
+          const idMap = {}; // incoming category id -> resolved id in this session
+          const findExistingId = (name, parentId) => {
+            for (const nid in nodes) {
+              const n = nodes[nid];
+              const isMatch = parentId ? (!n.isTop && n.parent === parentId) : n.isTop;
+              if (isMatch && n.name === name) return nid;
+            }
+            return null;
+          };
+          const registerNew = (cc) => {
+            registerCategoryNode(cc);
+            applyCustomCategoryToCatalog(cc);
+            customCategories.push(cc);
+            idMap[cc.id] = cc.id;
+          };
+          data.customCategories.filter(cc => !cc.parentId).forEach(cc => {
+            const existing = findExistingId(cc.name, null);
+            if (existing) idMap[cc.id] = existing;
+            else registerNew(cc);
+          });
+          data.customCategories.filter(cc => cc.parentId).forEach(cc => {
+            const resolvedParent = idMap[cc.parentId] || cc.parentId;
+            const existing = findExistingId(cc.name, resolvedParent);
+            if (existing) idMap[cc.id] = existing;
+            else registerNew(resolvedParent === cc.parentId ? cc : Object.assign({}, cc, { parentId: resolvedParent }));
+          });
+          customItems.forEach(it => {
+            if (idMap[it.catId]) it.catId = idMap[it.catId];
+            if (it.subId && idMap[it.subId]) it.subId = idMap[it.subId];
+          });
         }
         saveState(); saveCustom(); saveHidden(); saveHiddenCats(); saveCustomCategories();
         renderAll();
