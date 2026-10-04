@@ -514,6 +514,10 @@
   const $importInput = document.getElementById("importInput");
   const $modalRoot = document.getElementById("modalRoot");
 
+  $statTotal.title = "클릭하면 화면에 안 보이는 항목 목록을 볼 수 있습니다";
+  $statTotal.style.cursor = "pointer";
+  $statTotal.addEventListener("click", () => openHiddenListModal());
+
   // ── theme ───────────────────────────────────────────────────
   (function initTheme() {
     const saved = localStorage.getItem(LS_THEME);
@@ -958,6 +962,34 @@
     renderSidebar();
     renderContent();
     $statTotal.textContent = `${currentItems().length} / ${allItems.length + customItems.length}개`;
+  }
+
+  // ── breakdown of items not currently showing ───────────────────
+  function hiddenItemsBreakdown() {
+    return allMergedItems()
+      .filter(it => hiddenItems.has(itemKey(it)) || hiddenCats.has(it._cat) || (it._sub && isAncestorHidden(it._sub)))
+      .map(it => ({
+        t: it.t,
+        path: categoryPathFor(it),
+        reason: (hiddenCats.has(it._cat) || (it._sub && isAncestorHidden(it._sub))) ? "카테고리 숨김" : "개별 삭제됨 (완전 삭제)",
+      }));
+  }
+
+  function openHiddenListModal() {
+    const list = hiddenItemsBreakdown();
+    const rows = list.length
+      ? list.map(x => `<div class="hidden-row"><span class="hidden-row-t">${escapeHtml(x.t)}</span><span class="hidden-row-p">${escapeHtml(x.path)}</span><span class="hidden-row-r">${escapeHtml(x.reason)}</span></div>`).join("")
+      : `<div class="empty-state">숨겨진 항목이 없습니다.</div>`;
+    $modalRoot.innerHTML = `
+    <div class="modal-backdrop" id="modalBackdrop">
+      <div class="modal" style="width:640px;">
+        <h3>화면에 안 보이는 항목 (${list.length}개)</h3>
+        <div style="max-height:60vh;overflow-y:auto;">${rows}</div>
+        <div class="modal-actions"><button id="f_hidden_close" class="primary">닫기</button></div>
+      </div>
+    </div>`;
+    document.getElementById("f_hidden_close").addEventListener("click", closeModal);
+    document.getElementById("modalBackdrop").addEventListener("click", (e) => { if (e.target.id === "modalBackdrop") closeModal(); });
   }
 
   // ── search ──────────────────────────────────────────────────

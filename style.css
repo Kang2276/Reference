@@ -226,6 +226,14 @@ input:focus, select:focus, textarea:focus { outline: 1px solid var(--accent); }
 
 .empty-state { text-align: center; color: var(--text-faint); padding: 60px 20px; font-size: 13px; }
 
+.hidden-row {
+  display: flex; gap: 8px; align-items: baseline;
+  padding: 6px 4px; border-bottom: 1px solid var(--border); font-size: 12.5px;
+}
+.hidden-row-t { flex: 1; font-weight: 600; }
+.hidden-row-p { color: var(--text-faint); font-size: 11px; white-space: nowrap; }
+.hidden-row-r { color: var(--danger); font-size: 11px; white-space: nowrap; flex-shrink: 0; }
+
 /* modal */
 .modal-backdrop {
   position: fixed; inset: 0; background: rgba(0,0,0,.5); display: flex; align-items: center; justify-content: center;
