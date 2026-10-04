@@ -5,10 +5,10 @@
 // apiKey를 채우지 않으면 클라우드 동기화 없이 지금처럼 이 브라우저에만
 // 저장되는 방식으로 동작합니다 (기능이 꺼진 것처럼 안전하게 무시됩니다).
 window.FIREBASE_CONFIG = {
-  apiKey: "",
-  authDomain: "",
-  projectId: "",
-  storageBucket: "",
-  messagingSenderId: "",
-  appId: "",
+  apiKey: "AIzaSyDRDpE5Afv3bfEZ7XoYy5RUB5xOLFhQ4PM",
+  authDomain: "library-78608.firebaseapp.com",
+  projectId: "library-78608",
+  storageBucket: "library-78608.firebasestorage.app",
+  messagingSenderId: "288890690122",
+  appId: "1:288890690122:web:6e32e9f4010ba0fe8264b3",
 };
