@@ -11,4 +11,7 @@ window.FIREBASE_CONFIG = {
   storageBucket: "library-78608.firebasestorage.app",
   messagingSenderId: "288890690122",
   appId: "1:288890690122:web:6e32e9f4010ba0fe8264b3",
+  // Firebase Authentication > Users 에서 만든 관리자 계정의 이메일.
+  // 이 이메일로 로그인했을 때만 추가/수정/삭제가 가능해집니다.
+  ownerEmail: "",
 };

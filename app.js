@@ -1244,14 +1244,23 @@
   // ── optional cloud sync (Firebase) ─────────────────────────────
   // Only activates when firebase-config.js has a real apiKey filled in;
   // otherwise the app behaves exactly as before (localStorage only).
+  // Viewing is always open; adding/editing/deleting requires logging in
+  // as the one owner account (email/password) — see OWNER_EMAIL below.
   (function initCloudSync() {
     const $syncStatus = document.getElementById("syncStatus");
+    const $loginBtn = document.getElementById("loginBtn");
     const setStatus = (text) => { if ($syncStatus) $syncStatus.textContent = text; };
 
     const cfg = window.FIREBASE_CONFIG;
     if (typeof firebase === "undefined" || !cfg || !cfg.apiKey) {
+      if ($loginBtn) $loginBtn.classList.add("hidden");
       return; // cloud sync not configured — stay fully local
     }
+
+    document.body.classList.add("guest-mode"); // default to read-only until owner login is confirmed
+    let isEditor = false;
+    let mergedOnce = false;
+    const OWNER_EMAIL = cfg.ownerEmail || "";
 
     const sessionTag = Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
     let applyingRemote = false;
@@ -1261,7 +1270,7 @@
     const db = firebase.firestore();
     const docRef = db.collection("animLib").doc("shared");
 
-    setStatus("☁ 연결 중...");
+    setStatus("☁ 불러오는 중...");
 
     function currentLocalDoc() {
       return {
@@ -1328,57 +1337,110 @@
       (remote.hiddenCats || []).forEach(k => hiddenCats.add(k));
     }
 
-    function attachListener() {
-      docRef.onSnapshot(snap => {
-        if (!snap.exists) return;
-        const remote = snap.data();
-        if (remote._writerTag === sessionTag) return; // ignore echo of our own write
-        setStatus("☁ 새 변경사항 반영 중...");
-        applyingRemote = true;
-        customItems = remote.customItems || [];
-        customCategories = remote.customCategories || [];
-        hiddenItems = new Set(remote.hiddenItems || []);
-        hiddenCats = new Set(remote.hiddenCats || []);
-        itemState = remote.itemState || {};
-        categoryOrder = remote.categoryOrder || {};
-        saveCustom(); saveCustomCategories(); saveHidden(); saveHiddenCats(); saveState(); saveCategoryOrder();
-        // CATALOG/nodes were built once at page load from the old data, so the
-        // simplest correct way to reflect a wholesale remote replace is a reload.
-        location.reload();
-      }, err => { console.error("동기화 수신 실패", err); setStatus("☁ 연결 오류"); });
+    function applyRemoteAndReload(remote) {
+      customItems = remote.customItems || [];
+      customCategories = remote.customCategories || [];
+      hiddenItems = new Set(remote.hiddenItems || []);
+      hiddenCats = new Set(remote.hiddenCats || []);
+      itemState = remote.itemState || {};
+      categoryOrder = remote.categoryOrder || {};
+      saveCustomRaw(); saveCustomCategoriesRaw(); saveHiddenRaw(); saveHiddenCatsRaw(); saveStateRaw(); saveCategoryOrderRaw();
+      // CATALOG/nodes were built once at page load from the old data, so the
+      // simplest correct way to reflect a wholesale remote replace is a reload.
+      location.reload();
     }
 
-    firebase.auth().signInAnonymously()
-      .then(() => docRef.get())
+    // wrap the save* functions once so editor-mode writes push to Firestore;
+    // the *Raw aliases always just hit localStorage, used for remote-applied state
+    const saveCustomRaw = saveCustom, saveCustomCategoriesRaw = saveCustomCategories,
+      saveHiddenRaw = saveHidden, saveHiddenCatsRaw = saveHiddenCats,
+      saveStateRaw = saveState, saveCategoryOrderRaw = saveCategoryOrder;
+    saveCustom = function () { saveCustomRaw(); if (isEditor) schedulePush(); };
+    saveCustomCategories = function () { saveCustomCategoriesRaw(); if (isEditor) schedulePush(); };
+    saveHidden = function () { saveHiddenRaw(); if (isEditor) schedulePush(); };
+    saveHiddenCats = function () { saveHiddenCatsRaw(); if (isEditor) schedulePush(); };
+    saveState = function () { saveStateRaw(); if (isEditor) schedulePush(); };
+    saveCategoryOrder = function () { saveCategoryOrderRaw(); if (isEditor) schedulePush(); };
+
+    // read is open to everyone, no login needed: load once, then stay live
+    docRef.get()
       .then(snap => {
-        if (!snap.exists) {
-          setStatus("☁ 최초 업로드 중...");
-          return docRef.set(currentLocalDoc());
-        }
-        const remote = snap.data();
-        applyingRemote = true; // merged result is pushed explicitly below; skip the debounced auto-push
-        mergeRemoteIn(remote);
-        saveCustom(); saveCustomCategories(); saveHidden(); saveHiddenCats(); saveState();
-        renderAll();
-        setStatus("☁ 병합 업로드 중...");
-        return docRef.set(currentLocalDoc()).then(() => { applyingRemote = false; });
+        setStatus("☁ 동기화됨 (읽기 전용)");
+        if (snap.exists) { applyRemoteAndReload(snap.data()); return; }
       })
-      .then(() => { setStatus("☁ 동기화됨"); attachListener(); })
+      .then(() => {
+        docRef.onSnapshot(snap => {
+          if (!snap.exists) return;
+          const remote = snap.data();
+          if (remote._writerTag === sessionTag) return; // ignore echo of our own write
+          setStatus(isEditor ? "☁ 새 변경사항 반영 중..." : "☁ 새 변경사항 반영 중... (읽기 전용)");
+          applyRemoteAndReload(remote);
+        }, err => { console.error("동기화 수신 실패", err); setStatus("☁ 연결 오류"); });
+      })
       .catch(err => { console.error("동기화 초기화 실패", err); setStatus("☁ 연결 실패"); });
 
-    // push local changes up whenever this device saves them
-    const origSaveCustom = saveCustom;
-    const origSaveCustomCategories = saveCustomCategories;
-    const origSaveHidden = saveHidden;
-    const origSaveHiddenCats = saveHiddenCats;
-    const origSaveState = saveState;
-    const origSaveCategoryOrder = saveCategoryOrder;
-    saveCustom = function () { origSaveCustom(); schedulePush(); };
-    saveCustomCategories = function () { origSaveCustomCategories(); schedulePush(); };
-    saveHidden = function () { origSaveHidden(); schedulePush(); };
-    saveHiddenCats = function () { origSaveHiddenCats(); schedulePush(); };
-    saveState = function () { origSaveState(); schedulePush(); };
-    saveCategoryOrder = function () { origSaveCategoryOrder(); schedulePush(); };
+    // owner login unlocks editing
+    firebase.auth().onAuthStateChanged(user => {
+      const isOwner = !!(user && !user.isAnonymous && OWNER_EMAIL && user.email === OWNER_EMAIL);
+      isEditor = isOwner;
+      document.body.classList.toggle("guest-mode", !isOwner);
+      if ($loginBtn) {
+        $loginBtn.textContent = isOwner ? "🔓 로그아웃" : "🔑 로그인";
+        $loginBtn.title = isOwner ? `${OWNER_EMAIL}로 로그인됨` : "관리자 로그인";
+      }
+      if (!isOwner) { setStatus("☁ 읽기 전용"); return; }
+
+      // became (or re-confirmed) the owner: merge any local-only edits into the
+      // shared doc once per session, then push, same rule as export/import merge
+      if (mergedOnce) { setStatus("☁ 동기화됨 (편집 가능)"); return; }
+      mergedOnce = true;
+      docRef.get().then(snap => {
+        if (snap.exists) {
+          applyingRemote = true;
+          mergeRemoteIn(snap.data());
+          saveCustomRaw(); saveCustomCategoriesRaw(); saveHiddenRaw(); saveHiddenCatsRaw(); saveStateRaw();
+          renderAll();
+          applyingRemote = false;
+        }
+        setStatus("☁ 업로드 중...");
+        return docRef.set(currentLocalDoc());
+      }).then(() => setStatus("☁ 동기화됨 (편집 가능)"))
+        .catch(err => { console.error("동기화 병합 실패", err); setStatus("☁ 업로드 실패"); });
+    });
+
+    if ($loginBtn) {
+      $loginBtn.addEventListener("click", () => {
+        if (isEditor) { firebase.auth().signOut(); return; }
+        openLoginModal();
+      });
+    }
+
+    function openLoginModal() {
+      const modalHtml = `
+      <div class="modal-backdrop" id="modalBackdrop">
+        <div class="modal">
+          <h3>관리자 로그인</h3>
+          <div class="field"><label>이메일</label><input id="f_login_email" type="email" placeholder="owner@example.com"></div>
+          <div class="field"><label>비밀번호</label><input id="f_login_pw" type="password"></div>
+          <div class="field" id="f_login_err" style="color:var(--danger);font-size:12px;"></div>
+          <div class="modal-actions">
+            <button id="f_login_cancel">취소</button>
+            <button id="f_login_submit" class="primary">로그인</button>
+          </div>
+        </div>
+      </div>`;
+      $modalRoot.innerHTML = modalHtml;
+      document.getElementById("f_login_cancel").addEventListener("click", closeModal);
+      document.getElementById("modalBackdrop").addEventListener("click", (e) => { if (e.target.id === "modalBackdrop") closeModal(); });
+      document.getElementById("f_login_submit").addEventListener("click", () => {
+        const email = document.getElementById("f_login_email").value.trim();
+        const pw = document.getElementById("f_login_pw").value;
+        const errEl = document.getElementById("f_login_err");
+        firebase.auth().signInWithEmailAndPassword(email, pw)
+          .then(() => closeModal())
+          .catch(err => { errEl.textContent = "로그인 실패: " + err.message; });
+      });
+    }
   })();
 
   // ── init ────────────────────────────────────────────────────

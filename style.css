@@ -263,6 +263,27 @@ input:focus, select:focus, textarea:focus { outline: 1px solid var(--accent); }
 ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 6px; }
 ::-webkit-scrollbar-track { background: transparent; }
 
+/* guest (read-only) mode: hide every control that would change shared data */
+body.guest-mode #addBtn,
+body.guest-mode #importBtn,
+body.guest-mode #importInput,
+body.guest-mode #addCatBtn,
+body.guest-mode .fav-btn,
+body.guest-mode .watch-btn,
+body.guest-mode .move-btn,
+body.guest-mode .edit-btn,
+body.guest-mode .del-btn,
+body.guest-mode .hide-btn,
+body.guest-mode .restore-btn,
+body.guest-mode .card-note,
+body.guest-mode .cat-check,
+body.guest-mode .cat-add-sub,
+body.guest-mode .cat-del,
+body.guest-mode .cat-empty-trash,
+body.guest-mode .restore-cat-btn {
+  display: none !important;
+}
+
 @media (max-width: 760px) {
   .app { grid-template-columns: 1fr; grid-template-rows: auto auto 1fr; }
   .sidebar-col { border-right: none; border-bottom: 1px solid var(--border); max-height: 200px; }
