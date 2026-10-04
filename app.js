@@ -1337,7 +1337,20 @@
       (remote.hiddenCats || []).forEach(k => hiddenCats.add(k));
     }
 
+    // without this check, every load would fetch the (unchanged) remote doc
+    // and reload forever — only reload when something actually differs
+    function remoteMatchesLocal(remote) {
+      const norm = (o) => JSON.stringify(o);
+      return norm(customItems) === norm(remote.customItems || [])
+        && norm(customCategories) === norm(remote.customCategories || [])
+        && norm(Array.from(hiddenItems)) === norm(remote.hiddenItems || [])
+        && norm(Array.from(hiddenCats)) === norm(remote.hiddenCats || [])
+        && norm(itemState) === norm(remote.itemState || {})
+        && norm(categoryOrder) === norm(remote.categoryOrder || {});
+    }
+
     function applyRemoteAndReload(remote) {
+      if (remoteMatchesLocal(remote)) return; // nothing actually changed — skip the reload
       customItems = remote.customItems || [];
       customCategories = remote.customCategories || [];
       hiddenItems = new Set(remote.hiddenItems || []);
@@ -1373,6 +1386,7 @@
           if (!snap.exists) return;
           const remote = snap.data();
           if (remote._writerTag === sessionTag) return; // ignore echo of our own write
+          if (remoteMatchesLocal(remote)) return; // nothing actually changed
           setStatus(isEditor ? "☁ 새 변경사항 반영 중..." : "☁ 새 변경사항 반영 중... (읽기 전용)");
           applyRemoteAndReload(remote);
         }, err => { console.error("동기화 수신 실패", err); setStatus("☁ 연결 오류"); });
