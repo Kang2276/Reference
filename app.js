@@ -410,6 +410,7 @@
         catId: TRASH_ID, subId: TRASH_ITEMS_ID,
         trashedFrom: { catId: it._cat, subId: it._sub || null },
         trashedOriginalKey: key,
+        createdAt: Date.now(),
       });
       saveHidden();
     }
@@ -663,7 +664,18 @@
     if (ui.featuredOnly) items = items.filter(it => it.featured);
     if (ui.unwatchedOnly) items = items.filter(it => !getState(it.u).watched);
     if (ui.activeTag) items = items.filter(it => (it.tags || []).includes(ui.activeTag));
-    return items;
+    return sortByRecency(items);
+  }
+
+  // newest custom items first, ahead of the static catalog items (whose relative order is kept as-is)
+  function sortByRecency(items) {
+    return items.slice().sort((a, b) => {
+      const aCustom = a.custom ? 1 : 0;
+      const bCustom = b.custom ? 1 : 0;
+      if (aCustom !== bCustom) return bCustom - aCustom;
+      if (a.custom && b.custom) return (b.createdAt || 0) - (a.createdAt || 0);
+      return 0;
+    });
   }
 
   function scopeNode() {
@@ -965,6 +977,7 @@
           id: "c" + Date.now() + Math.random().toString(36).slice(2, 7),
           t: it.t, u: it.u, s: it.s, tags: it.tags, d: it.d, thumb: it.thumb || undefined,
           catId, subId: subId || null,
+          createdAt: Date.now(),
         });
         saveCustom();
       }
@@ -1069,11 +1082,11 @@
         // editing a default (non-custom) item: hide the original and save the edit as a custom copy
         hiddenItems.add(forkKey);
         saveHidden();
-        customItems.push({ id: "c" + Date.now() + Math.random().toString(36).slice(2, 7), t, u, s, tags, d, catId, subId: subId || null });
+        customItems.push({ id: "c" + Date.now() + Math.random().toString(36).slice(2, 7), t, u, s, tags, d, catId, subId: subId || null, createdAt: Date.now() });
       } else if (isEdit) {
         Object.assign(existing, { t, u, s, tags, d, catId, subId: subId || null });
       } else {
-        customItems.push({ id: "c" + Date.now() + Math.random().toString(36).slice(2, 7), t, u, s, tags, d, catId, subId: subId || null });
+        customItems.push({ id: "c" + Date.now() + Math.random().toString(36).slice(2, 7), t, u, s, tags, d, catId, subId: subId || null, createdAt: Date.now() });
       }
       saveCustom();
       closeModal();
