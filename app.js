@@ -484,15 +484,13 @@
     const hasChildren = entry.subcategories && entry.subcategories.length > 0;
 
     let html = `<div class="cat-row ${active ? "active" : ""}" data-cat="${topId}"${isTop ? "" : ` data-sub="${id}"`}>`;
-    html += (!isTrashRoot && !underTrash)
-      ? `<button class="icon-btn cat-add-sub" data-addsub="${id}" title="하위 카테고리 추가">＋</button>`
-      : `<span class="cat-add-spacer"></span>`;
     html += `<input type="checkbox" class="cat-check" data-catid="${id}" ${checked ? "checked" : ""} title="체크 해제 시 이 카테고리(하위 포함) 숨김">`;
     html += hasChildren ? `<span class="caret ${open ? "open" : ""}" data-toggle="${id}">▶</span>` : `<span class="caret"></span>`;
     html += `<span class="name">${entry.name}</span><span class="count">${countFor(topId, isTop ? null : id)}</span>`;
     if (isCustom) html += `<button class="icon-btn cat-del" data-catdel="${id}" title="카테고리 삭제(휴지통으로 이동)">🗑</button>`;
     if (isTrashRoot) html += `<button class="icon-btn cat-empty-trash" data-empty-trash="1" title="휴지통 비우기(영구 삭제)">비우기</button>`;
     if (isRestorable) html += `<button class="icon-btn restore-cat-btn" data-restorecat="${id}" title="카테고리 복구">♻ 복구</button>`;
+    if (!isTrashRoot && !underTrash) html += `<button class="icon-btn cat-add-sub" data-addsub="${id}" title="하위 카테고리 추가">＋</button>`;
     html += `</div>`;
 
     if (hasChildren) {

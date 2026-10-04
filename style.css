@@ -125,7 +125,6 @@ input:focus, select:focus, textarea:focus { outline: 1px solid var(--accent); }
 .cat-row .count { font-size: 11px; color: var(--text-faint); }
 .cat-row .cat-add-sub { width: 20px; height: 20px; padding: 0; font-size: 13px; line-height: 1; flex-shrink: 0; opacity: .7; }
 .cat-row .cat-add-sub:hover { opacity: 1; border-color: var(--accent); color: var(--accent); }
-.cat-row .cat-add-spacer { display: inline-block; width: 20px; flex-shrink: 0; }
 .cat-row .cat-del { padding: 2px 6px; font-size: 11px; flex-shrink: 0; opacity: .55; }
 .cat-row .cat-del:hover { opacity: 1; border-color: var(--danger); color: var(--danger); }
 .cat-row .cat-empty-trash { padding: 2px 8px; font-size: 11px; flex-shrink: 0; color: var(--danger); border-color: var(--danger); }
