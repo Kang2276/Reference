@@ -429,10 +429,10 @@
       const catIsCustom = !isTrashRoot && customCategories.some(cc => cc.id === cat.id);
       html += `<div class="cat-node">`;
       html += `<div class="cat-row ${activeTop ? "active" : ""}" data-cat="${cat.id}">`
+        + (!isTrashRoot ? `<button class="icon-btn cat-add-sub" data-addsub="${cat.id}" title="하위 카테고리 추가">＋</button>` : `<span class="cat-add-spacer"></span>`)
         + `<input type="checkbox" class="cat-check" data-catid="${cat.id}" ${catChecked ? "checked" : ""} title="체크 해제 시 이 카테고리 전체 숨김">`
         + (cat.subcategories && cat.subcategories.length ? `<span class="caret ${open ? "open" : ""}" data-toggle="${cat.id}">▶</span>` : `<span class="caret"></span>`)
         + `<span class="name">${cat.name}</span><span class="count">${countFor(cat.id)}</span>`
-        + (!isTrashRoot ? `<button class="icon-btn cat-add-sub" data-addsub="${cat.id}" title="하위 카테고리 추가">＋</button>` : "")
         + (catIsCustom ? `<button class="icon-btn cat-del" data-catdel="${cat.id}" title="카테고리 삭제(휴지통으로 이동)">🗑</button>` : "")
         + (isTrashRoot ? `<button class="icon-btn cat-empty-trash" data-empty-trash="1" title="휴지통 비우기(영구 삭제)">비우기</button>` : "")
         + `</div>`;
