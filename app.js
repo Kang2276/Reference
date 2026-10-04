@@ -10,6 +10,7 @@
   const LS_THEME = "animLib.theme";
   const LS_THUMB = "animLib.thumbCache"; // { [url]: youtube thumbnail_url } — playlist oEmbed results
   const LS_CUSTOM_CATS = "animLib.customCategories"; // [ {id, name, desc, parentId} ]
+  const LS_CAT_ORDER = "animLib.categoryOrder"; // { [parentId or "top"]: [childId, ...] }
   const TRASH_ID = "trash"; // reserved top-level category id: holds categories removed via the UI
   const TRASH_ITEMS_ID = "trash-items"; // reserved sub-category under trash: holds individually-deleted items
 
@@ -19,6 +20,7 @@
   let hiddenCats = new Set(loadJSON(LS_HIDDEN_CATS, []));
   let thumbCache = loadJSON(LS_THUMB, {});
   let customCategories = loadJSON(LS_CUSTOM_CATS, []);
+  let categoryOrder = loadJSON(LS_CAT_ORDER, {});
   if (!customCategories.some(cc => cc.id === TRASH_ID)) {
     customCategories.push({ id: TRASH_ID, name: "🗑 휴지통", desc: "삭제된 카테고리 보관함", parentId: null });
     saveJSON(LS_CUSTOM_CATS, customCategories);
@@ -43,6 +45,7 @@
   function saveHiddenCats() { saveJSON(LS_HIDDEN_CATS, Array.from(hiddenCats)); }
   function saveThumbCache() { saveJSON(LS_THUMB, thumbCache); }
   function saveCustomCategories() { saveJSON(LS_CUSTOM_CATS, customCategories); }
+  function saveCategoryOrder() { saveJSON(LS_CAT_ORDER, categoryOrder); }
 
   // ── merge custom categories/subcategories into CATALOG ────────
   function findCatalogNode(list, id) {
@@ -81,6 +84,23 @@
       });
     }
   })();
+
+  // ── apply any saved drag-and-drop ordering (any ids not saved keep their
+  // natural position at the end, so new/default categories still show up) ──
+  function applyCategoryOrder(list, parentKey) {
+    const order = categoryOrder[parentKey];
+    if (order && order.length) {
+      list.sort((a, b) => {
+        const ia = order.indexOf(a.id), ib = order.indexOf(b.id);
+        if (ia === -1 && ib === -1) return 0;
+        if (ia === -1) return 1;
+        if (ib === -1) return -1;
+        return ia - ib;
+      });
+    }
+    list.forEach(entry => { if (entry.subcategories) applyCategoryOrder(entry.subcategories, entry.id); });
+  }
+  applyCategoryOrder(CATALOG.categories, "top");
 
   // ── YouTube thumbnail helpers ──────────────────────────────
   function ytVideoId(url) {
@@ -180,6 +200,23 @@
     let cur = nodes[id];
     while (cur && !cur.isTop) cur = nodes[cur.parent];
     return cur ? cur.id : null;
+  }
+
+  // ── reorder a category among its siblings (same parent) via drag-and-drop ──
+  function reorderCategorySibling(draggedId, parentKey, targetId, insertAfter) {
+    if (draggedId === targetId) return;
+    const list = parentKey === "top" ? CATALOG.categories : (findCatalogNode(CATALOG.categories, parentKey) || {}).subcategories;
+    if (!list) return;
+    const fromIdx = list.findIndex(e => e.id === draggedId);
+    if (fromIdx === -1) return;
+    const [moved] = list.splice(fromIdx, 1);
+    let toIdx = list.findIndex(e => e.id === targetId);
+    if (toIdx === -1) { list.push(moved); } else {
+      list.splice(insertAfter ? toIdx + 1 : toIdx, 0, moved);
+    }
+    categoryOrder[parentKey] = list.map(e => e.id);
+    saveCategoryOrder();
+    renderAll();
   }
 
   // ── move a custom category (and all its nested custom sub-categories/items) to trash ──
@@ -439,6 +476,7 @@
     openCats: new Set(CATALOG.categories.map(c => c.id)), // sidebar expand state
   };
   let renderedByKey = new Map(); // itemKey -> item, refreshed on every renderContent() call
+  let draggedCatId = null; // category id currently being drag-and-dropped in the sidebar, if any
 
   // ── DOM refs ────────────────────────────────────────────────
   const $sidebar = document.getElementById("sidebar");
@@ -482,8 +520,11 @@
     const isCustom = !isTrashRoot && !underTrash && customCategories.some(cc => cc.id === id);
     const isRestorable = underTrash && depth === 1 && id !== TRASH_ITEMS_ID;
     const hasChildren = entry.subcategories && entry.subcategories.length > 0;
+    const draggableRow = !isTrashRoot && !underTrash;
+    const parentKey = isTop ? "top" : (nodes[id] && nodes[id].parent) || "top";
 
-    let html = `<div class="cat-row ${active ? "active" : ""}" data-cat="${topId}"${isTop ? "" : ` data-sub="${id}"`}>`;
+    let html = `<div class="cat-row ${active ? "active" : ""}" data-cat="${topId}"${isTop ? "" : ` data-sub="${id}"`}`
+      + (draggableRow ? ` draggable="true" data-dragid="${id}" data-parentkey="${parentKey}"` : "") + `>`;
     html += `<input type="checkbox" class="cat-check" data-catid="${id}" ${checked ? "checked" : ""} title="체크 해제 시 이 카테고리(하위 포함) 숨김">`;
     html += hasChildren ? `<span class="caret ${open ? "open" : ""}" data-toggle="${id}">▶</span>` : `<span class="caret"></span>`;
     html += `<span class="name">${entry.name}</span><span class="count">${countFor(topId, isTop ? null : id)}</span>`;
@@ -565,6 +606,38 @@
         ui.selSub = sub || null;
         ui.activeTag = null;
         renderAll();
+      });
+    });
+
+    // ── drag-and-drop reordering among siblings ──
+    $sidebar.querySelectorAll("[data-dragid]").forEach(el => {
+      el.addEventListener("dragstart", (e) => {
+        draggedCatId = el.getAttribute("data-dragid");
+        e.dataTransfer.effectAllowed = "move";
+        e.dataTransfer.setData("text/plain", draggedCatId);
+        el.classList.add("dragging");
+      });
+      el.addEventListener("dragend", () => {
+        draggedCatId = null;
+        $sidebar.querySelectorAll(".dragging, .drag-over-top, .drag-over-bottom")
+          .forEach(x => x.classList.remove("dragging", "drag-over-top", "drag-over-bottom"));
+      });
+      el.addEventListener("dragover", (e) => {
+        if (!draggedCatId || draggedCatId === el.getAttribute("data-dragid")) return;
+        const draggedEl = $sidebar.querySelector(`[data-dragid="${draggedCatId}"]`);
+        if (!draggedEl || draggedEl.getAttribute("data-parentkey") !== el.getAttribute("data-parentkey")) return;
+        e.preventDefault();
+        const rect = el.getBoundingClientRect();
+        const after = (e.clientY - rect.top) > rect.height / 2;
+        el.classList.toggle("drag-over-top", !after);
+        el.classList.toggle("drag-over-bottom", after);
+      });
+      el.addEventListener("dragleave", () => el.classList.remove("drag-over-top", "drag-over-bottom"));
+      el.addEventListener("drop", (e) => {
+        e.preventDefault();
+        const after = el.classList.contains("drag-over-bottom");
+        el.classList.remove("drag-over-top", "drag-over-bottom");
+        if (draggedCatId) reorderCategorySibling(draggedCatId, el.getAttribute("data-parentkey"), el.getAttribute("data-dragid"), after);
       });
     });
   }
