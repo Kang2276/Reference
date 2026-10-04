@@ -717,8 +717,8 @@
           ${it._cat === TRASH_ID
             ? `<button class="icon-btn restore-btn" data-id="${it.customId}" title="원래 카테고리로 복구">↩ 복구</button>`
             : `<button class="icon-btn move-btn" title="다른 카테고리로 이동">➜ 이동</button>`
-              + (it.custom ? `<button class="icon-btn edit-btn" data-id="${it.customId}" title="편집">✎</button><button class="icon-btn danger del-btn" data-id="${it.customId}" title="삭제">🗑 삭제</button>`
-                            : `<button class="icon-btn danger hide-btn" title="삭제">🗑 삭제</button>`)}
+              + (it.custom ? `<button class="icon-btn edit-btn" data-id="${it.customId}" title="편집">✎ 수정</button><button class="icon-btn danger del-btn" data-id="${it.customId}" title="삭제">🗑 삭제</button>`
+                            : `<button class="icon-btn edit-btn" title="편집">✎ 수정</button><button class="icon-btn danger hide-btn" title="삭제">🗑 삭제</button>`)}
         </div>
       </div>
     </div>`;
@@ -799,7 +799,15 @@
         }
       });
       if (moveBtn) moveBtn.addEventListener("click", () => openMoveModal(key));
-      if (editBtn) editBtn.addEventListener("click", () => openItemModal(customItems.find(c => c.id === editBtn.getAttribute("data-id"))));
+      if (editBtn) editBtn.addEventListener("click", () => {
+        const dataId = editBtn.getAttribute("data-id");
+        if (dataId) {
+          openItemModal(customItems.find(c => c.id === dataId));
+        } else {
+          const it = renderedByKey.get(key);
+          if (it) openItemModal({ t: it.t, u: it.u, s: it.s, tags: it.tags, d: it.d, catId: it._cat, subId: it._sub }, key);
+        }
+      });
       if (delBtn) delBtn.addEventListener("click", () => {
         if (confirm("이 항목을 휴지통으로 이동할까요?")) {
           const it = renderedByKey.get(key);
@@ -943,13 +951,14 @@
     });
   }
 
-  function openItemModal(existing) {
+  function openItemModal(existing, forkKey) {
     const isEdit = !!existing;
     const val = existing || { t: "", u: "", s: "YouTube", tags: [], d: "", catId: CATALOG.categories[0].id, subId: "" };
     const modalHtml = `
     <div class="modal-backdrop" id="modalBackdrop">
       <div class="modal">
         <h3>${isEdit ? "레퍼런스 편집" : "레퍼런스 추가"}</h3>
+        ${forkKey ? `<div class="field" style="color:var(--text-faint);font-size:11.5px;">기본 제공 항목이라 수정하면 내 항목으로 복사되어 저장됩니다.</div>` : ""}
         <div class="field"><label>제목</label><input id="f_t" value="${escapeAttr(val.t)}" placeholder="제목"></div>
         <div class="field"><label>URL</label><input id="f_u" value="${escapeAttr(val.u)}" placeholder="https://..."></div>
         <div class="field"><label>소스 타입</label>
@@ -983,7 +992,12 @@
       const tags = document.getElementById("f_tags").value.split(",").map(x => x.trim()).filter(Boolean);
       const d = document.getElementById("f_d").value.trim();
 
-      if (isEdit) {
+      if (forkKey) {
+        // editing a default (non-custom) item: hide the original and save the edit as a custom copy
+        hiddenItems.add(forkKey);
+        saveHidden();
+        customItems.push({ id: "c" + Date.now() + Math.random().toString(36).slice(2, 7), t, u, s, tags, d, catId, subId: subId || null });
+      } else if (isEdit) {
         Object.assign(existing, { t, u, s, tags, d, catId, subId: subId || null });
       } else {
         customItems.push({ id: "c" + Date.now() + Math.random().toString(36).slice(2, 7), t, u, s, tags, d, catId, subId: subId || null });
