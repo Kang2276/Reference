@@ -805,6 +805,17 @@
     return `<div class="card-thumb" data-url="${escapeAttr(it.u)}"${attrs}><span class="thumb-icon">${catIcon}</span>${img}<span class="thumb-play">▶</span></div>`;
   }
 
+  function categoryPathFor(it) {
+    const leafId = it._sub || it._cat;
+    const names = [];
+    let cur = nodes[leafId];
+    while (cur) {
+      names.unshift(cur.name);
+      cur = cur.parent ? nodes[cur.parent] : null;
+    }
+    return names.join(" › ");
+  }
+
   function cardHtml(it) {
     const st = getState(it.u);
     return `
@@ -817,6 +828,7 @@
       ${it.tags && it.tags.length ? `<div class="card-tags">${it.tags.map(tg => `<span class="card-tag">${escapeHtml(tg)}</span>`).join("")}</div>` : ""}
       ${it.d ? `<div class="card-desc">${escapeHtml(it.d)}</div>` : ""}
       <div class="card-note"><textarea placeholder="메모 추가...">${escapeHtml(st.note || "")}</textarea></div>
+      <div class="card-path">📁 ${escapeHtml(categoryPathFor(it))}</div>
       <div class="card-bottom">
         <div class="card-actions">
           ${it._cat === FAVORITES_ID ? "" : `<button class="icon-btn fav-btn ${st.favorite ? "on" : ""}" title="즐겨찾기 (즐겨찾기 카테고리에 복사됨)">${st.favorite ? "⭐" : "☆"}</button>`}
