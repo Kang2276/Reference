@@ -1268,6 +1268,7 @@
 
     firebase.initializeApp(cfg);
     const db = firebase.firestore();
+    db.settings({ ignoreUndefinedProperties: true }); // customItems can have thumb:undefined; Firestore rejects undefined otherwise
     const docRef = db.collection("animLib").doc("shared");
 
     setStatus("☁ 불러오는 중...");
@@ -1341,12 +1342,23 @@
     // and reload forever — only reload when something actually differs
     function remoteMatchesLocal(remote) {
       const norm = (o) => JSON.stringify(o);
-      return norm(customItems) === norm(remote.customItems || [])
-        && norm(customCategories) === norm(remote.customCategories || [])
-        && norm(Array.from(hiddenItems)) === norm(remote.hiddenItems || [])
-        && norm(Array.from(hiddenCats)) === norm(remote.hiddenCats || [])
-        && norm(itemState) === norm(remote.itemState || {})
-        && norm(categoryOrder) === norm(remote.categoryOrder || {});
+      const fields = {
+        customItems: [customItems, remote.customItems || []],
+        customCategories: [customCategories, remote.customCategories || []],
+        hiddenItems: [Array.from(hiddenItems), remote.hiddenItems || []],
+        hiddenCats: [Array.from(hiddenCats), remote.hiddenCats || []],
+        itemState: [itemState, remote.itemState || {}],
+        categoryOrder: [categoryOrder, remote.categoryOrder || {}],
+      };
+      let allMatch = true;
+      for (const key in fields) {
+        const [local, rem] = fields[key];
+        if (norm(local) !== norm(rem)) {
+          console.warn(`[동기화] "${key}" 필드가 다름으로 감지됨`, { local, remote: rem });
+          allMatch = false;
+        }
+      }
+      return allMatch;
     }
 
     function applyRemoteAndReload(remote) {
@@ -1359,7 +1371,17 @@
       categoryOrder = remote.categoryOrder || {};
       saveCustomRaw(); saveCustomCategoriesRaw(); saveHiddenRaw(); saveHiddenCatsRaw(); saveStateRaw(); saveCategoryOrderRaw();
       // CATALOG/nodes were built once at page load from the old data, so the
-      // simplest correct way to reflect a wholesale remote replace is a reload.
+      // simplest correct way to reflect a wholesale remote replace is a reload —
+      // but throttle it so a persistent mismatch can't reload forever.
+      const GUARD_KEY = "animLib.lastSyncReload";
+      const last = Number(sessionStorage.getItem(GUARD_KEY) || 0);
+      const now = Date.now();
+      if (now - last < 5000) {
+        console.warn("[동기화] 짧은 시간 안에 반복 새로고침이 감지되어 건너뜁니다. 위 로그에서 어떤 필드가 다른지 확인하세요.");
+        renderAll();
+        return;
+      }
+      sessionStorage.setItem(GUARD_KEY, String(now));
       location.reload();
     }
 
