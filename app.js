@@ -13,6 +13,7 @@
   const LS_CAT_ORDER = "animLib.categoryOrder"; // { [parentId or "top"]: [childId, ...] }
   const TRASH_ID = "trash"; // reserved top-level category id: holds categories removed via the UI
   const TRASH_ITEMS_ID = "trash-items"; // reserved sub-category under trash: holds individually-deleted items
+  const FAVORITES_ID = "favorites"; // reserved top-level category id: holds copies of starred items
 
   let itemState = loadJSON(LS_STATE, {});
   let customItems = loadJSON(LS_CUSTOM, []);
@@ -27,6 +28,10 @@
   }
   if (!customCategories.some(cc => cc.id === TRASH_ITEMS_ID)) {
     customCategories.push({ id: TRASH_ITEMS_ID, name: "개별 삭제된 항목", desc: "카테고리와 상관없이 개별적으로 삭제된 레퍼런스", parentId: TRASH_ID });
+    saveJSON(LS_CUSTOM_CATS, customCategories);
+  }
+  if (!customCategories.some(cc => cc.id === FAVORITES_ID)) {
+    customCategories.push({ id: FAVORITES_ID, name: "⭐ 즐겨찾기", desc: "즐겨찾기한 레퍼런스 모음", parentId: null });
     saveJSON(LS_CUSTOM_CATS, customCategories);
   }
 
@@ -418,6 +423,24 @@
     renderAll();
   }
 
+  // ── copy an item into the 즐겨찾기 category when it's starred (and drop the copy when un-starred) ──
+  function addToFavorites(it) {
+    const sourceKey = itemKey(it);
+    if (it._cat === FAVORITES_ID || customItems.some(c => c.catId === FAVORITES_ID && c.favSourceKey === sourceKey)) return;
+    customItems.push({
+      id: "c" + Date.now() + Math.random().toString(36).slice(2, 7),
+      t: it.t, u: it.u, s: it.s, tags: it.tags, d: it.d, thumb: it.thumb || undefined,
+      catId: FAVORITES_ID, subId: null,
+      favSourceKey: sourceKey,
+      createdAt: Date.now(),
+    });
+    saveCustom();
+  }
+  function removeFromFavorites(sourceKey) {
+    customItems = customItems.filter(c => !(c.catId === FAVORITES_ID && c.favSourceKey === sourceKey));
+    saveCustom();
+  }
+
   // ── restore a trashed item back to where it came from ──
   function restoreItem(customId) {
     const it = customItems.find(c => c.id === customId);
@@ -517,8 +540,9 @@
     const active = isTop ? (ui.selCat === id && !ui.selSub) : (ui.selCat === topId && ui.selSub === id);
     const checked = !hiddenCats.has(id);
     const isTrashRoot = id === TRASH_ID;
+    const isFavoritesRoot = id === FAVORITES_ID;
     const underTrash = topId === TRASH_ID && !isTop;
-    const isCustom = !isTrashRoot && !underTrash && customCategories.some(cc => cc.id === id);
+    const isCustom = !isTrashRoot && !isFavoritesRoot && !underTrash && customCategories.some(cc => cc.id === id);
     const isRestorable = underTrash && depth === 1 && id !== TRASH_ITEMS_ID;
     const hasChildren = entry.subcategories && entry.subcategories.length > 0;
     const draggableRow = !isTrashRoot && !underTrash;
@@ -795,7 +819,7 @@
       <div class="card-note"><textarea placeholder="메모 추가...">${escapeHtml(st.note || "")}</textarea></div>
       <div class="card-bottom">
         <div class="card-actions">
-          <button class="icon-btn fav-btn ${st.favorite ? "on" : ""}" title="즐겨찾기">${st.favorite ? "⭐" : "☆"}</button>
+          ${it._cat === FAVORITES_ID ? "" : `<button class="icon-btn fav-btn ${st.favorite ? "on" : ""}" title="즐겨찾기 (즐겨찾기 카테고리에 복사됨)">${st.favorite ? "⭐" : "☆"}</button>`}
           <button class="icon-btn watch-btn ${st.watched ? "on" : ""}" title="확인함">${st.watched ? "✔ 확인함" : "확인"}</button>
         </div>
         <div class="card-actions">
@@ -875,7 +899,15 @@
       const restoreBtn = card.querySelector(".restore-btn");
       const note = card.querySelector(".card-note textarea");
 
-      if (favBtn) favBtn.addEventListener("click", () => { setState(url, { favorite: !getState(url).favorite }); renderContent(); });
+      if (favBtn) favBtn.addEventListener("click", () => {
+        const nowFav = !getState(url).favorite;
+        setState(url, { favorite: nowFav });
+        const it = renderedByKey.get(key);
+        if (it) {
+          if (nowFav) addToFavorites(it); else removeFromFavorites(key);
+        }
+        renderContent();
+      });
       if (watchBtn) watchBtn.addEventListener("click", () => { setState(url, { watched: !getState(url).watched }); renderContent(); });
       if (hideBtn) hideBtn.addEventListener("click", () => {
         if (confirm("이 레퍼런스를 휴지통으로 이동할까요?")) {
