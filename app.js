@@ -45,21 +45,42 @@
   function saveCustomCategories() { saveJSON(LS_CUSTOM_CATS, customCategories); }
 
   // ── merge custom categories/subcategories into CATALOG ────────
+  function findCatalogNode(list, id) {
+    for (const node of list) {
+      if (node.id === id) return node;
+      if (node.subcategories && node.subcategories.length) {
+        const found = findCatalogNode(node.subcategories, id);
+        if (found) return found;
+      }
+    }
+    return null;
+  }
   function applyCustomCategoryToCatalog(cc) {
     if (!cc.parentId) {
       if (CATALOG.categories.some(c => c.id === cc.id)) return true;
       CATALOG.categories.push({ id: cc.id, name: cc.name, desc: cc.desc || "", items: [], subcategories: [] });
       return true;
     }
-    const parent = CATALOG.categories.find(c => c.id === cc.parentId);
+    const parent = findCatalogNode(CATALOG.categories, cc.parentId);
     if (!parent) return false;
     if (!parent.subcategories) parent.subcategories = [];
     if (parent.subcategories.some(s => s.id === cc.id)) return true;
     parent.subcategories.push({ id: cc.id, name: cc.name, desc: cc.desc || "", items: [] });
     return true;
   }
-  customCategories.forEach(cc => { if (!cc.parentId) applyCustomCategoryToCatalog(cc); });
-  customCategories.forEach(cc => { if (cc.parentId) applyCustomCategoryToCatalog(cc); });
+  // apply in multiple passes so a sub-category-of-a-sub-category resolves
+  // regardless of array order (e.g. after an import merge)
+  (function applyAllCustomCategories() {
+    let pending = customCategories.slice();
+    let progressed = true;
+    while (pending.length && progressed) {
+      progressed = false;
+      pending = pending.filter(cc => {
+        if (applyCustomCategoryToCatalog(cc)) { progressed = true; return false; }
+        return true;
+      });
+    }
+  })();
 
   // ── YouTube thumbnail helpers ──────────────────────────────
   function ytVideoId(url) {
@@ -123,15 +144,21 @@
 
   function starFlag(desc) { return /★/.test(desc || ""); }
 
-  CATALOG.categories.forEach(cat => {
-    nodes[cat.id] = { id: cat.id, name: cat.name, icon: cat.icon, desc: cat.desc, guide: cat.guide || null, noGuide: !!cat.noGuide, isTop: true, subIds: [] };
-    (cat.items || []).forEach(it => pushItem(it, cat.id, null));
-    (cat.subcategories || []).forEach(sub => {
-      nodes[sub.id] = { id: sub.id, name: sub.name, icon: sub.icon, desc: sub.desc, guide: sub.guide || null, noGuide: !!sub.noGuide, isTop: false, parent: cat.id };
-      nodes[cat.id].subIds.push(sub.id);
-      (sub.items || []).forEach(it => pushItem(it, cat.id, sub.id));
-    });
-  });
+  // registers a category (and its nested subcategories, any depth) into `nodes`,
+  // flattening each item's address to (top-level id, immediate leaf-container id)
+  function registerNodeTree(entry, parentId, topId) {
+    const isTop = !parentId;
+    nodes[entry.id] = {
+      id: entry.id, name: entry.name, icon: entry.icon || "", desc: entry.desc || "",
+      guide: entry.guide || null, noGuide: !!entry.noGuide,
+      isTop, parent: parentId || undefined, subIds: [],
+    };
+    if (parentId && nodes[parentId]) nodes[parentId].subIds.push(entry.id);
+    (entry.items || []).forEach(it => pushItem(it, isTop ? entry.id : topId, isTop ? null : entry.id));
+    (entry.subcategories || []).forEach(sub => registerNodeTree(sub, entry.id, isTop ? entry.id : topId));
+  }
+
+  CATALOG.categories.forEach(cat => registerNodeTree(cat, null, null));
 
   function pushItem(it, catId, subId) {
     allItems.push({
@@ -144,27 +171,44 @@
     if (!cc.parentId) {
       nodes[cc.id] = { id: cc.id, name: cc.name, icon: "", desc: cc.desc || "", guide: null, noGuide: false, isTop: true, subIds: [] };
     } else if (nodes[cc.parentId]) {
-      nodes[cc.id] = { id: cc.id, name: cc.name, icon: "", desc: cc.desc || "", guide: null, noGuide: false, isTop: false, parent: cc.parentId };
+      nodes[cc.id] = { id: cc.id, name: cc.name, icon: "", desc: cc.desc || "", guide: null, noGuide: false, isTop: false, parent: cc.parentId, subIds: [] };
       nodes[cc.parentId].subIds.push(cc.id);
     }
   }
 
-  // ── move a custom category (and its custom sub-categories/items) to trash ──
+  function topAncestorOf(id) {
+    let cur = nodes[id];
+    while (cur && !cur.isTop) cur = nodes[cur.parent];
+    return cur ? cur.id : null;
+  }
+
+  // ── move a custom category (and all its nested custom sub-categories/items) to trash ──
   function moveCategoryToTrash(id) {
     if (id === TRASH_ID) return;
     const node = nodes[id];
     if (!node) return;
     const idsToMove = [id];
     if (node.isTop) {
-      customCategories.forEach(cc => { if (cc.parentId === id) idsToMove.push(cc.id); });
+      // collect every descendant, any depth, parent-before-children order
+      const collect = (pid) => {
+        const n = nodes[pid];
+        if (!n) return;
+        (n.subIds || []).slice().forEach(childId => { idsToMove.push(childId); collect(childId); });
+      };
+      collect(id);
     }
 
     const affected = allMergedItems().filter(it => idsToMove.includes(it._cat) || (it._sub && idsToMove.includes(it._sub))).length;
     const msg = `"${node.name}" 카테고리를 휴지통으로 이동하시겠습니까?` + (affected ? `\n안에 있는 항목 ${affected}개도 함께 이동됩니다.` : "");
     if (!confirm(msg)) return;
 
+    // precompute each id's original top ancestor before any structural mutation
+    const origTopOf = {};
+    idsToMove.forEach(rid => { origTopOf[rid] = topAncestorOf(rid); });
+
     const trashCatalog = CATALOG.categories.find(c => c.id === TRASH_ID);
-    idsToMove.forEach(rid => {
+    // process deepest descendants first so a node's original parent is still intact when detaching it
+    idsToMove.slice().reverse().forEach(rid => {
       const n = nodes[rid];
       if (!n) return;
 
@@ -172,7 +216,8 @@
       if (n.isTop) {
         customItems.forEach(it => { if (it.catId === rid && !it.subId) { it.catId = TRASH_ID; it.subId = rid; } });
       } else {
-        customItems.forEach(it => { if (it.catId === n.parent && it.subId === rid) { it.catId = TRASH_ID; } });
+        const topAnc = origTopOf[rid];
+        customItems.forEach(it => { if (it.catId === topAnc && it.subId === rid) { it.catId = TRASH_ID; } });
       }
 
       // detach from its current position
@@ -180,7 +225,7 @@
         const idx = CATALOG.categories.findIndex(c => c.id === rid);
         if (idx !== -1) CATALOG.categories.splice(idx, 1);
       } else {
-        const parent = CATALOG.categories.find(c => c.id === n.parent);
+        const parent = findCatalogNode(CATALOG.categories, n.parent);
         if (parent && parent.subcategories) {
           const idx = parent.subcategories.findIndex(s => s.id === rid);
           if (idx !== -1) parent.subcategories.splice(idx, 1);
@@ -193,14 +238,14 @@
       }
       hiddenCats.delete(rid);
 
-      // re-attach as a sub-category under trash
+      // re-attach as a (flat) sub-category under trash
       if (trashCatalog) {
         if (!trashCatalog.subcategories) trashCatalog.subcategories = [];
         if (!trashCatalog.subcategories.some(s => s.id === rid)) {
           trashCatalog.subcategories.push({ id: rid, name: n.name, desc: n.desc || "", items: [] });
         }
       }
-      nodes[rid] = { id: rid, name: n.name, icon: "", desc: n.desc || "", guide: null, noGuide: false, isTop: false, parent: TRASH_ID };
+      nodes[rid] = { id: rid, name: n.name, icon: "", desc: n.desc || "", guide: null, noGuide: false, isTop: false, parent: TRASH_ID, subIds: [] };
       if (!nodes[TRASH_ID].subIds.includes(rid)) nodes[TRASH_ID].subIds.push(rid);
 
       // remember where it came from so it can be restored later
@@ -235,7 +280,8 @@
     if (wantedParentId && customCategories.some(cc => cc.id === wantedParentId && cc.parentId === TRASH_ID)) {
       restoreCategory(wantedParentId);
     }
-    const finalParentId = (wantedParentId && nodes[wantedParentId] && nodes[wantedParentId].isTop) ? wantedParentId : null;
+    const finalParentId = (wantedParentId && nodes[wantedParentId]) ? wantedParentId : null;
+    const finalTopId = finalParentId ? (nodes[finalParentId].isTop ? finalParentId : topAncestorOf(finalParentId)) : id;
 
     // detach from trash
     const trashCatalog = CATALOG.categories.find(c => c.id === TRASH_ID);
@@ -252,15 +298,15 @@
     // remap items sitting in this bucket to the restored location
     customItems.forEach(it => {
       if (it.catId === TRASH_ID && it.subId === id) {
-        if (finalParentId) { it.catId = finalParentId; it.subId = id; }
+        if (finalParentId) { it.catId = finalTopId; it.subId = id; }
         else { it.catId = id; it.subId = null; }
       }
     });
 
     // re-attach at the restored position
     if (finalParentId) {
-      nodes[id] = { id, name: entry.name, icon: "", desc: entry.desc || "", guide: null, noGuide: false, isTop: false, parent: finalParentId };
-      const parentCatalog = CATALOG.categories.find(c => c.id === finalParentId);
+      nodes[id] = { id, name: entry.name, icon: "", desc: entry.desc || "", guide: null, noGuide: false, isTop: false, parent: finalParentId, subIds: [] };
+      const parentCatalog = findCatalogNode(CATALOG.categories, finalParentId);
       if (parentCatalog) {
         if (!parentCatalog.subcategories) parentCatalog.subcategories = [];
         parentCatalog.subcategories.push({ id, name: entry.name, desc: entry.desc || "", items: [] });
@@ -369,8 +415,16 @@
   function itemKey(it) {
     return it.custom ? `custom:${it.customId}` : `default:${it._cat}:${it._sub || ""}:${it.u}`;
   }
+  function isAncestorHidden(leafId) {
+    let cur = leafId;
+    while (cur) {
+      if (hiddenCats.has(cur)) return true;
+      cur = nodes[cur] && nodes[cur].parent;
+    }
+    return false;
+  }
   function currentItems() {
-    return allMergedItems().filter(it => !hiddenItems.has(itemKey(it)) && !hiddenCats.has(it._cat) && !(it._sub && hiddenCats.has(it._sub)));
+    return allMergedItems().filter(it => !hiddenItems.has(itemKey(it)) && !hiddenCats.has(it._cat) && !(it._sub && isAncestorHidden(it._sub)));
   }
 
   // ── UI state ────────────────────────────────────────────────
@@ -416,43 +470,46 @@
     return currentItems().filter(it => it._cat === catId && (subId ? it._sub === subId : true)).length;
   }
 
+  // renders one category row plus (recursively) any nested sub-categories, any depth
+  function renderCatRow(entry, topId, depth) {
+    const id = entry.id;
+    const isTop = depth === 0;
+    const open = ui.openCats.has(id);
+    const active = isTop ? (ui.selCat === id && !ui.selSub) : (ui.selCat === topId && ui.selSub === id);
+    const checked = !hiddenCats.has(id);
+    const isTrashRoot = id === TRASH_ID;
+    const underTrash = topId === TRASH_ID && !isTop;
+    const isCustom = !isTrashRoot && !underTrash && customCategories.some(cc => cc.id === id);
+    const isRestorable = underTrash && depth === 1 && id !== TRASH_ITEMS_ID;
+    const hasChildren = entry.subcategories && entry.subcategories.length > 0;
+
+    let html = `<div class="cat-row ${active ? "active" : ""}" data-cat="${topId}"${isTop ? "" : ` data-sub="${id}"`}>`;
+    html += (!isTrashRoot && !underTrash)
+      ? `<button class="icon-btn cat-add-sub" data-addsub="${id}" title="하위 카테고리 추가">＋</button>`
+      : `<span class="cat-add-spacer"></span>`;
+    html += `<input type="checkbox" class="cat-check" data-catid="${id}" ${checked ? "checked" : ""} title="체크 해제 시 이 카테고리(하위 포함) 숨김">`;
+    html += hasChildren ? `<span class="caret ${open ? "open" : ""}" data-toggle="${id}">▶</span>` : `<span class="caret"></span>`;
+    html += `<span class="name">${entry.name}</span><span class="count">${countFor(topId, isTop ? null : id)}</span>`;
+    if (isCustom) html += `<button class="icon-btn cat-del" data-catdel="${id}" title="카테고리 삭제(휴지통으로 이동)">🗑</button>`;
+    if (isTrashRoot) html += `<button class="icon-btn cat-empty-trash" data-empty-trash="1" title="휴지통 비우기(영구 삭제)">비우기</button>`;
+    if (isRestorable) html += `<button class="icon-btn restore-cat-btn" data-restorecat="${id}" title="카테고리 복구">♻ 복구</button>`;
+    html += `</div>`;
+
+    if (hasChildren) {
+      html += `<div class="sub-list ${open ? "" : "hidden"}">`;
+      entry.subcategories.forEach(child => { html += renderCatRow(child, topId, depth + 1); });
+      html += `</div>`;
+    }
+    return html;
+  }
+
   function renderSidebar() {
     const total = currentItems().length;
     const allActive = ui.selCat === null;
     let html = `<div class="stats">전체 ${total}개 레퍼런스</div>`;
     html += `<div class="cat-row ${allActive ? "active" : ""}" data-cat="null"><span class="caret"></span><span class="name">전체</span><span class="count">${total}</span></div>`;
     CATALOG.categories.forEach(cat => {
-      const open = ui.openCats.has(cat.id);
-      const activeTop = ui.selCat === cat.id && !ui.selSub;
-      const catChecked = !hiddenCats.has(cat.id);
-      const isTrashRoot = cat.id === TRASH_ID;
-      const catIsCustom = !isTrashRoot && customCategories.some(cc => cc.id === cat.id);
-      html += `<div class="cat-node">`;
-      html += `<div class="cat-row ${activeTop ? "active" : ""}" data-cat="${cat.id}">`
-        + (!isTrashRoot ? `<button class="icon-btn cat-add-sub" data-addsub="${cat.id}" title="하위 카테고리 추가">＋</button>` : `<span class="cat-add-spacer"></span>`)
-        + `<input type="checkbox" class="cat-check" data-catid="${cat.id}" ${catChecked ? "checked" : ""} title="체크 해제 시 이 카테고리 전체 숨김">`
-        + (cat.subcategories && cat.subcategories.length ? `<span class="caret ${open ? "open" : ""}" data-toggle="${cat.id}">▶</span>` : `<span class="caret"></span>`)
-        + `<span class="name">${cat.name}</span><span class="count">${countFor(cat.id)}</span>`
-        + (catIsCustom ? `<button class="icon-btn cat-del" data-catdel="${cat.id}" title="카테고리 삭제(휴지통으로 이동)">🗑</button>` : "")
-        + (isTrashRoot ? `<button class="icon-btn cat-empty-trash" data-empty-trash="1" title="휴지통 비우기(영구 삭제)">비우기</button>` : "")
-        + `</div>`;
-      if (cat.subcategories && cat.subcategories.length) {
-        html += `<div class="sub-list ${open ? "" : "hidden"}">`;
-        cat.subcategories.forEach(sub => {
-          const activeSub = ui.selCat === cat.id && ui.selSub === sub.id;
-          const subChecked = !hiddenCats.has(sub.id);
-          const subIsCustom = !isTrashRoot && customCategories.some(cc => cc.id === sub.id);
-          const subIsRestorable = isTrashRoot && sub.id !== TRASH_ITEMS_ID;
-          html += `<div class="cat-row ${activeSub ? "active" : ""}" data-cat="${cat.id}" data-sub="${sub.id}">`
-            + `<input type="checkbox" class="cat-check" data-catid="${sub.id}" ${subChecked ? "checked" : ""} title="체크 해제 시 이 카테고리 숨김">`
-            + `<span class="caret"></span><span class="name">${sub.name}</span><span class="count">${countFor(cat.id, sub.id)}</span>`
-            + (subIsCustom ? `<button class="icon-btn cat-del" data-catdel="${sub.id}" title="카테고리 삭제(휴지통으로 이동)">🗑</button>` : "")
-            + (subIsRestorable ? `<button class="icon-btn restore-cat-btn" data-restorecat="${sub.id}" title="카테고리 복구">♻ 복구</button>` : "")
-            + `</div>`;
-        });
-        html += `</div>`;
-      }
-      html += `</div>`;
+      html += `<div class="cat-node">` + renderCatRow(cat, cat.id, 0) + `</div>`;
     });
     $sidebar.innerHTML = html;
 
@@ -460,14 +517,12 @@
       el.addEventListener("click", (e) => e.stopPropagation());
       el.addEventListener("change", () => {
         const id = el.getAttribute("data-catid");
-        const setChecked = (catId, checked) => {
+        const cascade = (catId, checked) => {
           if (checked) hiddenCats.delete(catId); else hiddenCats.add(catId);
+          const n = nodes[catId];
+          if (n && n.subIds) n.subIds.forEach(childId => cascade(childId, checked));
         };
-        setChecked(id, el.checked);
-        const cat = CATALOG.categories.find(c => c.id === id);
-        if (cat && cat.subcategories) {
-          cat.subcategories.forEach(sub => setChecked(sub.id, el.checked));
-        }
+        cascade(id, el.checked);
         saveHiddenCats();
         renderAll();
       });
@@ -780,12 +835,14 @@
   // ── add/edit modal ─────────────────────────────────────────
   function allCatOptions() {
     let opts = "";
+    function walk(topId, entry, depth) {
+      const prefix = depth > 0 ? "　".repeat(depth) + "└ " : "";
+      opts += `<option value="${topId}|${depth > 0 ? entry.id : ""}">${prefix}${entry.name}</option>`;
+      (entry.subcategories || []).forEach(sub => walk(topId, sub, depth + 1));
+    }
     CATALOG.categories.forEach(cat => {
       if (cat.id === TRASH_ID) return;
-      opts += `<option value="${cat.id}|">${cat.name}</option>`;
-      (cat.subcategories || []).forEach(sub => {
-        opts += `<option value="${cat.id}|${sub.id}">　└ ${sub.name}</option>`;
-      });
+      walk(cat.id, cat, 0);
     });
     return opts;
   }
@@ -838,7 +895,15 @@
   }
 
   function openAddCategoryModal(presetParentId) {
-    const parentOptions = CATALOG.categories.filter(cat => cat.id !== TRASH_ID).map(cat => `<option value="${cat.id}">${cat.name}</option>`).join("");
+    let parentOptions = "";
+    (function buildParentOptions(list, depth) {
+      list.forEach(cat => {
+        if (cat.id === TRASH_ID) return;
+        const prefix = depth > 0 ? "　".repeat(depth) + "└ " : "";
+        parentOptions += `<option value="${cat.id}">${prefix}${cat.name}</option>`;
+        if (cat.subcategories) buildParentOptions(cat.subcategories, depth + 1);
+      });
+    })(CATALOG.categories, 0);
     const modalHtml = `
     <div class="modal-backdrop" id="modalBackdrop">
       <div class="modal">
