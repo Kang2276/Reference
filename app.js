@@ -1241,6 +1241,146 @@
   }
   function escapeAttr(str) { return escapeHtml(str); }
 
+  // ── optional cloud sync (Firebase) ─────────────────────────────
+  // Only activates when firebase-config.js has a real apiKey filled in;
+  // otherwise the app behaves exactly as before (localStorage only).
+  (function initCloudSync() {
+    const $syncStatus = document.getElementById("syncStatus");
+    const setStatus = (text) => { if ($syncStatus) $syncStatus.textContent = text; };
+
+    const cfg = window.FIREBASE_CONFIG;
+    if (typeof firebase === "undefined" || !cfg || !cfg.apiKey) {
+      return; // cloud sync not configured — stay fully local
+    }
+
+    const sessionTag = Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+    let applyingRemote = false;
+    let pushTimer = null;
+
+    firebase.initializeApp(cfg);
+    const db = firebase.firestore();
+    const docRef = db.collection("animLib").doc("shared");
+
+    setStatus("☁ 연결 중...");
+
+    function currentLocalDoc() {
+      return {
+        customItems, customCategories,
+        hiddenItems: Array.from(hiddenItems), hiddenCats: Array.from(hiddenCats),
+        itemState, categoryOrder,
+        updatedAt: Date.now(), _writerTag: sessionTag,
+      };
+    }
+
+    function schedulePush() {
+      if (applyingRemote) return;
+      clearTimeout(pushTimer);
+      pushTimer = setTimeout(() => {
+        setStatus("☁ 업로드 중...");
+        docRef.set(currentLocalDoc())
+          .then(() => setStatus("☁ 동기화됨"))
+          .catch(err => { console.error("동기화 업로드 실패", err); setStatus("☁ 업로드 실패"); });
+      }, 800);
+    }
+
+    // merge this device's local-only categories/items into what's already on the server
+    // (same "match by name, else create" rule as the export/import merge)
+    function mergeRemoteIn(remote) {
+      const idMap = {};
+      const findExistingId = (name, parentId) => {
+        for (const nid in nodes) {
+          const n = nodes[nid];
+          const isMatch = parentId ? (!n.isTop && n.parent === parentId) : n.isTop;
+          if (isMatch && n.name === name) return nid;
+        }
+        return null;
+      };
+      const registerNew = (cc) => {
+        registerCategoryNode(cc);
+        applyCustomCategoryToCatalog(cc);
+        customCategories.push(cc);
+        idMap[cc.id] = cc.id;
+      };
+      (remote.customCategories || []).filter(cc => !cc.parentId).forEach(cc => {
+        if (customCategories.some(x => x.id === cc.id)) { idMap[cc.id] = cc.id; return; }
+        const existing = findExistingId(cc.name, null);
+        if (existing) idMap[cc.id] = existing; else registerNew(cc);
+      });
+      (remote.customCategories || []).filter(cc => cc.parentId).forEach(cc => {
+        if (customCategories.some(x => x.id === cc.id)) { idMap[cc.id] = cc.id; return; }
+        const resolvedParent = idMap[cc.parentId] || cc.parentId;
+        const existing = findExistingId(cc.name, resolvedParent);
+        if (existing) idMap[cc.id] = existing;
+        else registerNew(resolvedParent === cc.parentId ? cc : Object.assign({}, cc, { parentId: resolvedParent }));
+      });
+
+      const localIds = new Set(customItems.map(c => c.id));
+      (remote.customItems || []).forEach(it => {
+        if (localIds.has(it.id)) return;
+        const copy = Object.assign({}, it);
+        if (idMap[copy.catId]) copy.catId = idMap[copy.catId];
+        if (copy.subId && idMap[copy.subId]) copy.subId = idMap[copy.subId];
+        customItems.push(copy);
+      });
+
+      Object.assign(itemState, remote.itemState || {});
+      (remote.hiddenItems || []).forEach(k => hiddenItems.add(k));
+      (remote.hiddenCats || []).forEach(k => hiddenCats.add(k));
+    }
+
+    function attachListener() {
+      docRef.onSnapshot(snap => {
+        if (!snap.exists) return;
+        const remote = snap.data();
+        if (remote._writerTag === sessionTag) return; // ignore echo of our own write
+        setStatus("☁ 새 변경사항 반영 중...");
+        applyingRemote = true;
+        customItems = remote.customItems || [];
+        customCategories = remote.customCategories || [];
+        hiddenItems = new Set(remote.hiddenItems || []);
+        hiddenCats = new Set(remote.hiddenCats || []);
+        itemState = remote.itemState || {};
+        categoryOrder = remote.categoryOrder || {};
+        saveCustom(); saveCustomCategories(); saveHidden(); saveHiddenCats(); saveState(); saveCategoryOrder();
+        // CATALOG/nodes were built once at page load from the old data, so the
+        // simplest correct way to reflect a wholesale remote replace is a reload.
+        location.reload();
+      }, err => { console.error("동기화 수신 실패", err); setStatus("☁ 연결 오류"); });
+    }
+
+    firebase.auth().signInAnonymously()
+      .then(() => docRef.get())
+      .then(snap => {
+        if (!snap.exists) {
+          setStatus("☁ 최초 업로드 중...");
+          return docRef.set(currentLocalDoc());
+        }
+        const remote = snap.data();
+        applyingRemote = true; // merged result is pushed explicitly below; skip the debounced auto-push
+        mergeRemoteIn(remote);
+        saveCustom(); saveCustomCategories(); saveHidden(); saveHiddenCats(); saveState();
+        renderAll();
+        setStatus("☁ 병합 업로드 중...");
+        return docRef.set(currentLocalDoc()).then(() => { applyingRemote = false; });
+      })
+      .then(() => { setStatus("☁ 동기화됨"); attachListener(); })
+      .catch(err => { console.error("동기화 초기화 실패", err); setStatus("☁ 연결 실패"); });
+
+    // push local changes up whenever this device saves them
+    const origSaveCustom = saveCustom;
+    const origSaveCustomCategories = saveCustomCategories;
+    const origSaveHidden = saveHidden;
+    const origSaveHiddenCats = saveHiddenCats;
+    const origSaveState = saveState;
+    const origSaveCategoryOrder = saveCategoryOrder;
+    saveCustom = function () { origSaveCustom(); schedulePush(); };
+    saveCustomCategories = function () { origSaveCustomCategories(); schedulePush(); };
+    saveHidden = function () { origSaveHidden(); schedulePush(); };
+    saveHiddenCats = function () { origSaveHiddenCats(); schedulePush(); };
+    saveState = function () { origSaveState(); schedulePush(); };
+    saveCategoryOrder = function () { origSaveCategoryOrder(); schedulePush(); };
+  })();
+
   // ── init ────────────────────────────────────────────────────
   renderAll();
 })();
