@@ -432,6 +432,7 @@
         + `<input type="checkbox" class="cat-check" data-catid="${cat.id}" ${catChecked ? "checked" : ""} title="체크 해제 시 이 카테고리 전체 숨김">`
         + (cat.subcategories && cat.subcategories.length ? `<span class="caret ${open ? "open" : ""}" data-toggle="${cat.id}">▶</span>` : `<span class="caret"></span>`)
         + `<span class="name">${cat.name}</span><span class="count">${countFor(cat.id)}</span>`
+        + (!isTrashRoot ? `<button class="icon-btn cat-add-sub" data-addsub="${cat.id}" title="하위 카테고리 추가">＋</button>` : "")
         + (catIsCustom ? `<button class="icon-btn cat-del" data-catdel="${cat.id}" title="카테고리 삭제(휴지통으로 이동)">🗑</button>` : "")
         + (isTrashRoot ? `<button class="icon-btn cat-empty-trash" data-empty-trash="1" title="휴지통 비우기(영구 삭제)">비우기</button>` : "")
         + `</div>`;
@@ -487,6 +488,12 @@
       el.addEventListener("click", (e) => {
         e.stopPropagation();
         emptyTrash();
+      });
+    });
+    $sidebar.querySelectorAll(".cat-add-sub").forEach(el => {
+      el.addEventListener("click", (e) => {
+        e.stopPropagation();
+        openAddCategoryModal(el.getAttribute("data-addsub"));
       });
     });
     $sidebar.querySelectorAll("[data-toggle]").forEach(el => {
@@ -830,12 +837,12 @@
     });
   }
 
-  function openAddCategoryModal() {
+  function openAddCategoryModal(presetParentId) {
     const parentOptions = CATALOG.categories.filter(cat => cat.id !== TRASH_ID).map(cat => `<option value="${cat.id}">${cat.name}</option>`).join("");
     const modalHtml = `
     <div class="modal-backdrop" id="modalBackdrop">
       <div class="modal">
-        <h3>새 카테고리 만들기</h3>
+        <h3>${presetParentId ? "하위 카테고리 만들기" : "새 카테고리 만들기"}</h3>
         <div class="field"><label>카테고리 이름</label><input id="f_cat_name" placeholder="예: 크리처 채널"></div>
         <div class="field"><label>설명 (선택)</label><textarea id="f_cat_desc" placeholder="이 카테고리에 대한 설명"></textarea></div>
         <div class="field"><label>상위 카테고리</label>
@@ -851,6 +858,7 @@
       </div>
     </div>`;
     $modalRoot.innerHTML = modalHtml;
+    if (presetParentId) document.getElementById("f_cat_parent").value = presetParentId;
     document.getElementById("f_cat_cancel").addEventListener("click", closeModal);
     document.getElementById("modalBackdrop").addEventListener("click", (e) => { if (e.target.id === "modalBackdrop") closeModal(); });
     document.getElementById("f_cat_save").addEventListener("click", () => {
