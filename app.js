@@ -817,7 +817,9 @@
       if (cached) img = `<img src="${escapeAttr(cached)}" loading="lazy" alt="" onerror="this.remove()">`;
       attrs = ` data-pl-url="${escapeAttr(it.u)}" data-playlist-id="${escapeAttr(plId)}"`;
     } else if (vimeoId) {
-      attrs = ` data-vimeo-id="${escapeAttr(vimeoId)}"`;
+      const cached = thumbCache[it.u];
+      if (cached) img = `<img src="${escapeAttr(cached)}" loading="lazy" alt="" onerror="this.remove()">`;
+      attrs = ` data-vimeo-url="${escapeAttr(it.u)}" data-vimeo-id="${escapeAttr(vimeoId)}"`;
     }
     const overlay = isVideo ? `<span class="thumb-play">▶</span>` : (imageSrc ? `<span class="thumb-play thumb-zoom">🔍</span>` : "");
     return `<div class="card-thumb" data-url="${escapeAttr(it.u)}"${attrs}><span class="thumb-icon">${catIcon}</span>${img}${overlay}</div>`;
@@ -866,21 +868,26 @@
   let thumbObserver = null;
   function wirePlaylistThumbs() {
     if (thumbObserver) thumbObserver.disconnect();
-    const targets = $content.querySelectorAll(".card-thumb[data-pl-url]");
+    const targets = $content.querySelectorAll(".card-thumb[data-pl-url], .card-thumb[data-vimeo-url]");
     if (!targets.length) return;
     thumbObserver = new IntersectionObserver((entries) => {
       entries.forEach(entry => {
         if (!entry.isIntersecting) return;
         thumbObserver.unobserve(entry.target);
-        fetchPlaylistThumb(entry.target);
+        fetchRemoteThumb(entry.target);
       });
     }, { rootMargin: "200px" });
     targets.forEach(t => thumbObserver.observe(t));
   }
-  async function fetchPlaylistThumb(el) {
-    const url = el.getAttribute("data-pl-url");
+  async function fetchRemoteThumb(el) {
+    const plUrl = el.getAttribute("data-pl-url");
+    const vimeoUrl = el.getAttribute("data-vimeo-url");
+    const url = plUrl || vimeoUrl;
+    const oembedUrl = plUrl
+      ? `https://www.youtube.com/oembed?url=${encodeURIComponent(url)}&format=json`
+      : `https://vimeo.com/api/oembed.json?url=${encodeURIComponent(url)}`;
     try {
-      const res = await fetch(`https://www.youtube.com/oembed?url=${encodeURIComponent(url)}&format=json`);
+      const res = await fetch(oembedUrl);
       if (!res.ok) return;
       const data = await res.json();
       if (data && data.thumbnail_url) {
@@ -952,7 +959,7 @@
           openItemModal(customItems.find(c => c.id === dataId));
         } else {
           const it = renderedByKey.get(key);
-          if (it) openItemModal({ t: it.t, u: it.u, s: it.s, tags: it.tags, d: it.d, catId: it._cat, subId: it._sub }, key);
+          if (it) openItemModal({ t: it.t, u: it.u, s: it.s, tags: it.tags, thumb: it.thumb, d: it.d, catId: it._cat, subId: it._sub }, key);
         }
       });
       if (delBtn) delBtn.addEventListener("click", () => {
@@ -1146,6 +1153,7 @@
           <select id="f_cat">${allCatOptions()}</select>
         </div>
         <div class="field"><label>태그 (쉼표로 구분)</label><input id="f_tags" value="${escapeAttr((val.tags||[]).join(", "))}" placeholder="Walk, Idle, Attack"></div>
+        <div class="field"><label>썸네일 URL (선택, 유튜브는 자동)</label><input id="f_thumb" value="${escapeAttr(val.thumb || "")}" placeholder="https://..."></div>
         <div class="field"><label>설명</label><textarea id="f_d">${escapeHtml(val.d || "")}</textarea></div>
         <div class="modal-actions">
           <button id="f_cancel">취소</button>
@@ -1166,17 +1174,18 @@
       const [catId, subId] = document.getElementById("f_cat").value.split("|");
       const s = document.getElementById("f_s").value;
       const tags = document.getElementById("f_tags").value.split(",").map(x => x.trim()).filter(Boolean);
+      const thumb = document.getElementById("f_thumb").value.trim() || undefined;
       const d = document.getElementById("f_d").value.trim();
 
       if (forkKey) {
         // editing a default (non-custom) item: hide the original and save the edit as a custom copy
         hiddenItems.add(forkKey);
         saveHidden();
-        customItems.push({ id: "c" + Date.now() + Math.random().toString(36).slice(2, 7), t, u, s, tags, d, catId, subId: subId || null, createdAt: Date.now() });
+        customItems.push({ id: "c" + Date.now() + Math.random().toString(36).slice(2, 7), t, u, s, tags, thumb, d, catId, subId: subId || null, createdAt: Date.now() });
       } else if (isEdit) {
-        Object.assign(existing, { t, u, s, tags, d, catId, subId: subId || null });
+        Object.assign(existing, { t, u, s, tags, thumb, d, catId, subId: subId || null });
       } else {
-        customItems.push({ id: "c" + Date.now() + Math.random().toString(36).slice(2, 7), t, u, s, tags, d, catId, subId: subId || null, createdAt: Date.now() });
+        customItems.push({ id: "c" + Date.now() + Math.random().toString(36).slice(2, 7), t, u, s, tags, thumb, d, catId, subId: subId || null, createdAt: Date.now() });
       }
       saveCustom();
       closeModal();
