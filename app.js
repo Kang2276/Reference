@@ -175,7 +175,7 @@
 
   function pushItem(it, catId, subId) {
     allItems.push({
-      t: it.t, u: it.u, s: it.s, tags: it.tags || [], d: it.d || "", thumb: it.thumb || null,
+      t: it.t, u: it.u, s: it.s, tags: it.tags || [], d: it.d || "", thumb: it.thumb || null, vfile: it.vfile || null,
       _cat: catId, _sub: subId, featured: starFlag(it.d), custom: false,
     });
   }
@@ -421,7 +421,7 @@
       hiddenItems.add(key);
       customItems.push({
         id: "c" + Date.now() + Math.random().toString(36).slice(2, 7),
-        t: it.t, u: it.u, s: it.s, tags: it.tags, d: it.d, thumb: it.thumb || undefined,
+        t: it.t, u: it.u, s: it.s, tags: it.tags, d: it.d, thumb: it.thumb || undefined, vfile: it.vfile || undefined,
         catId: TRASH_ID, subId: TRASH_ITEMS_ID,
         trashedFrom: { catId: it._cat, subId: it._sub || null },
         trashedOriginalKey: key,
@@ -439,7 +439,7 @@
     if (it._cat === FAVORITES_ID || customItems.some(c => c.catId === FAVORITES_ID && c.favSourceKey === sourceKey)) return;
     customItems.push({
       id: "c" + Date.now() + Math.random().toString(36).slice(2, 7),
-      t: it.t, u: it.u, s: it.s, tags: it.tags, d: it.d, thumb: it.thumb || undefined,
+      t: it.t, u: it.u, s: it.s, tags: it.tags, d: it.d, thumb: it.thumb || undefined, vfile: it.vfile || undefined,
       catId: FAVORITES_ID, subId: null,
       favSourceKey: sourceKey,
       createdAt: Date.now(),
@@ -478,7 +478,7 @@
 
   function allMergedItems() {
     return allItems.concat(customItems.map(c => ({
-      t: c.t, u: c.u, s: c.s, tags: c.tags || [], d: c.d || "", thumb: c.thumb || null,
+      t: c.t, u: c.u, s: c.s, tags: c.tags || [], d: c.d || "", thumb: c.thumb || null, vfile: c.vfile || null,
       _cat: c.catId, _sub: c.subId || null, featured: starFlag(c.d),
       custom: true, customId: c.id,
     })));
@@ -967,7 +967,7 @@
           openItemModal(customItems.find(c => c.id === dataId));
         } else {
           const it = renderedByKey.get(key);
-          if (it) openItemModal({ t: it.t, u: it.u, s: it.s, tags: it.tags, thumb: it.thumb, d: it.d, catId: it._cat, subId: it._sub }, key);
+          if (it) openItemModal({ t: it.t, u: it.u, s: it.s, tags: it.tags, thumb: it.thumb, vfile: it.vfile, d: it.d, catId: it._cat, subId: it._sub }, key);
         }
       });
       if (delBtn) delBtn.addEventListener("click", () => {
@@ -1080,7 +1080,7 @@
         saveHidden();
         customItems.push({
           id: "c" + Date.now() + Math.random().toString(36).slice(2, 7),
-          t: it.t, u: it.u, s: it.s, tags: it.tags, d: it.d, thumb: it.thumb || undefined,
+          t: it.t, u: it.u, s: it.s, tags: it.tags, d: it.d, thumb: it.thumb || undefined, vfile: it.vfile || undefined,
           catId, subId: subId || null,
           createdAt: Date.now(),
         });
@@ -1189,7 +1189,7 @@
         // editing a default (non-custom) item: hide the original and save the edit as a custom copy
         hiddenItems.add(forkKey);
         saveHidden();
-        customItems.push({ id: "c" + Date.now() + Math.random().toString(36).slice(2, 7), t, u, s, tags, thumb, d, catId, subId: subId || null, createdAt: Date.now() });
+        customItems.push({ id: "c" + Date.now() + Math.random().toString(36).slice(2, 7), t, u, s, tags, thumb, vfile: val.vfile || undefined, d, catId, subId: subId || null, createdAt: Date.now() });
       } else if (isEdit) {
         Object.assign(existing, { t, u, s, tags, thumb, d, catId, subId: subId || null });
       } else {
