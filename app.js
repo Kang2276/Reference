@@ -797,10 +797,12 @@
     const vid = !isChannelBucket ? ytVideoId(it.u) : null;
     const plId = !vid && !isChannelBucket ? ytPlaylistId(it.u) : null;
     const vimeoId = !vid && !plId && !isChannelBucket ? vimeoVideoId(it.u) : null;
+    // a directly-playable video file (e.g. extracted from a Pinterest pin) we host no embed for
+    const directVideo = !vid && !plId && !vimeoId && !isChannelBucket && it.vfile ? it.vfile : null;
     // not a recognized video source: if there's at least a thumbnail image,
     // clicking enlarges it in the lightbox instead of just leaving the site
-    const imageSrc = !vid && !plId && !vimeoId && !isChannelBucket && it.thumb ? it.thumb : null;
-    const isVideo = !!(vid || plId || vimeoId);
+    const imageSrc = !vid && !plId && !vimeoId && !directVideo && !isChannelBucket && it.thumb ? it.thumb : null;
+    const isVideo = !!(vid || plId || vimeoId || directVideo);
     let img = "";
     let attrs = "";
     if (it.thumb) {
@@ -808,6 +810,7 @@
       if (plId) attrs = ` data-playlist-id="${escapeAttr(plId)}"`;
       else if (vid) attrs = ` data-video-id="${escapeAttr(vid)}"`;
       else if (vimeoId) attrs = ` data-vimeo-id="${escapeAttr(vimeoId)}"`;
+      else if (directVideo) attrs = ` data-vfile="${escapeAttr(directVideo)}"`;
       else if (imageSrc) attrs = ` data-img-src="${escapeAttr(imageSrc)}"`;
     } else if (vid) {
       img = `<img src="https://i.ytimg.com/vi/${escapeAttr(vid)}/mqdefault.jpg" loading="lazy" alt="" onerror="this.remove()">`;
@@ -820,6 +823,8 @@
       const cached = thumbCache[it.u];
       if (cached) img = `<img src="${escapeAttr(cached)}" loading="lazy" alt="" onerror="this.remove()">`;
       attrs = ` data-vimeo-url="${escapeAttr(it.u)}" data-vimeo-id="${escapeAttr(vimeoId)}"`;
+    } else if (directVideo) {
+      attrs = ` data-vfile="${escapeAttr(directVideo)}"`;
     }
     const overlay = isVideo ? `<span class="thumb-play">▶</span>` : (imageSrc ? `<span class="thumb-play thumb-zoom">🔍</span>` : "");
     return `<div class="card-thumb" data-url="${escapeAttr(it.u)}"${attrs}><span class="thumb-icon">${catIcon}</span>${img}${overlay}</div>`;
@@ -910,11 +915,13 @@
         const videoId = el.getAttribute("data-video-id");
         const playlistId = el.getAttribute("data-playlist-id");
         const vimeoId = el.getAttribute("data-vimeo-id");
+        const vfile = el.getAttribute("data-vfile");
         const imgSrc = el.getAttribute("data-img-src");
         const origUrl = el.getAttribute("data-url");
         if (videoId) openVideoModal({ type: "video", id: videoId, origUrl });
         else if (playlistId) openVideoModal({ type: "playlist", id: playlistId, origUrl });
         else if (vimeoId) openVideoModal({ type: "vimeo", id: vimeoId, origUrl });
+        else if (vfile) openNativeVideoModal(vfile, origUrl);
         else if (imgSrc) openImageModal(imgSrc);
         else window.open(el.getAttribute("data-url"), "_blank", "noopener");
       });
@@ -1236,6 +1243,23 @@
         <button class="icon-btn video-modal-close" id="videoModalClose" title="닫기">✕</button>
         <div class="video-modal-frame">
           <img src="${escapeAttr(src)}" alt="">
+        </div>
+      </div>
+    </div>`;
+    document.getElementById("videoModalClose").addEventListener("click", closeModal);
+    wireBackdropClose(document.getElementById("modalBackdrop"));
+  }
+
+  // plays a direct video file (mp4/webm) we have no embeddable page/iframe for,
+  // e.g. an mp4 URL extracted from a Pinterest pin
+  function openNativeVideoModal(src, origUrl) {
+    $modalRoot.innerHTML = `
+    <div class="modal-backdrop" id="modalBackdrop">
+      <div class="modal video-modal">
+        <button class="icon-btn video-modal-close" id="videoModalClose" title="닫기">✕</button>
+        ${origUrl ? `<a class="video-modal-origlink" href="${escapeAttr(origUrl)}" target="_blank" rel="noopener" title="원본 사이트에서 열기">🔗 원본에서 보기</a>` : ""}
+        <div class="video-modal-frame">
+          <video src="${escapeAttr(src)}" controls autoplay playsinline style="width:100%;height:100%;"></video>
         </div>
       </div>
     </div>`;

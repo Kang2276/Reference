@@ -1,6 +1,4 @@
-/* 애니메이션 레퍼런스 카탈로그 데이터
-   개인 재생목록 + Pinterest 보드에서 복원한 항목 포함.
-*/
+/* 애니메이션 레퍼런스 카탈로그 데이터 */
 const CATALOG = {
   "updated": "2026-08-27",
   "totalCount": 0,
@@ -5661,7 +5659,8 @@ const CATALOG = {
                 "혼합"
               ],
               "d": "동물,몬스터_애니메이션 핀터레스트 보드.",
-              "thumb": "https://i.pinimg.com/originals/fc/36/21/fc362183ca1cf12ca45ca128e8799abd.jpg"
+              "thumb": "https://i.pinimg.com/originals/fc/36/21/fc362183ca1cf12ca45ca128e8799abd.jpg",
+              "vfile": "https://v1.pinimg.com/videos/iht/expMp4/6d/91/48/6d9148a73a8aa05f7119c4acb9b1e183_720w.mp4"
             },
             {
               "t": "3D Character Animation | Animation | Custom Character",
