@@ -911,9 +911,10 @@
         const playlistId = el.getAttribute("data-playlist-id");
         const vimeoId = el.getAttribute("data-vimeo-id");
         const imgSrc = el.getAttribute("data-img-src");
-        if (videoId) openVideoModal({ type: "video", id: videoId });
-        else if (playlistId) openVideoModal({ type: "playlist", id: playlistId });
-        else if (vimeoId) openVideoModal({ type: "vimeo", id: vimeoId });
+        const origUrl = el.getAttribute("data-url");
+        if (videoId) openVideoModal({ type: "video", id: videoId, origUrl });
+        else if (playlistId) openVideoModal({ type: "playlist", id: playlistId, origUrl });
+        else if (vimeoId) openVideoModal({ type: "vimeo", id: vimeoId, origUrl });
         else if (imgSrc) openImageModal(imgSrc);
         else window.open(el.getAttribute("data-url"), "_blank", "noopener");
       });
@@ -1207,7 +1208,7 @@
     });
   }
 
-  function openVideoModal({ type, id }) {
+  function openVideoModal({ type, id, origUrl }) {
     const src = type === "playlist"
       ? `https://www.youtube.com/embed/videoseries?list=${encodeURIComponent(id)}&autoplay=1`
       : type === "vimeo"
@@ -1217,6 +1218,7 @@
     <div class="modal-backdrop" id="modalBackdrop">
       <div class="modal video-modal">
         <button class="icon-btn video-modal-close" id="videoModalClose" title="닫기">✕</button>
+        ${origUrl ? `<a class="video-modal-origlink" href="${escapeAttr(origUrl)}" target="_blank" rel="noopener" title="재생이 안 되면 원본 사이트에서 열기">🔗 원본에서 보기</a>` : ""}
         <div class="video-modal-frame">
           <iframe src="${escapeAttr(src)}" title="video player" frameborder="0"
             allow="autoplay; encrypted-media; picture-in-picture; clipboard-write; web-share" allowfullscreen></iframe>
