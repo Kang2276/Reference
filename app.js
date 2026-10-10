@@ -1010,7 +1010,7 @@
       </div>
     </div>`;
     document.getElementById("f_hidden_close").addEventListener("click", closeModal);
-    document.getElementById("modalBackdrop").addEventListener("click", (e) => { if (e.target.id === "modalBackdrop") closeModal(); });
+    wireBackdropClose(document.getElementById("modalBackdrop"));
   }
 
   // ── search ──────────────────────────────────────────────────
@@ -1057,7 +1057,7 @@
     sel.value = `${it._cat}|${it._sub || ""}`;
 
     document.getElementById("f_move_cancel").addEventListener("click", closeModal);
-    document.getElementById("modalBackdrop").addEventListener("click", (e) => { if (e.target.id === "modalBackdrop") closeModal(); });
+    wireBackdropClose(document.getElementById("modalBackdrop"));
     document.getElementById("f_move_save").addEventListener("click", () => {
       const [catId, subId] = sel.value.split("|");
       if (it.custom) {
@@ -1114,7 +1114,7 @@
     $modalRoot.innerHTML = modalHtml;
     if (presetParentId) document.getElementById("f_cat_parent").value = presetParentId;
     document.getElementById("f_cat_cancel").addEventListener("click", closeModal);
-    document.getElementById("modalBackdrop").addEventListener("click", (e) => { if (e.target.id === "modalBackdrop") closeModal(); });
+    wireBackdropClose(document.getElementById("modalBackdrop"));
     document.getElementById("f_cat_save").addEventListener("click", () => {
       const name = document.getElementById("f_cat_name").value.trim();
       if (!name) { alert("카테고리 이름은 필수입니다."); return; }
@@ -1166,7 +1166,7 @@
     sel.value = `${val.catId || CATALOG.categories[0].id}|${val.subId || ""}`;
 
     document.getElementById("f_cancel").addEventListener("click", closeModal);
-    document.getElementById("modalBackdrop").addEventListener("click", (e) => { if (e.target.id === "modalBackdrop") closeModal(); });
+    wireBackdropClose(document.getElementById("modalBackdrop"));
     document.getElementById("f_save").addEventListener("click", () => {
       const t = document.getElementById("f_t").value.trim();
       const u = document.getElementById("f_u").value.trim();
@@ -1194,6 +1194,19 @@
   }
   function closeModal() { $modalRoot.innerHTML = ""; }
 
+  // close-on-backdrop-click, but only when the drag actually started on the
+  // backdrop too — otherwise dragging the video modal's resize handle and
+  // releasing the mouse over the backdrop (very easy to do while resizing)
+  // was misread as "clicked the backdrop" and closed the popup.
+  function wireBackdropClose(backdrop) {
+    let downOnBackdrop = false;
+    backdrop.addEventListener("mousedown", (e) => { downOnBackdrop = e.target.id === "modalBackdrop"; });
+    backdrop.addEventListener("click", (e) => {
+      if (e.target.id === "modalBackdrop" && downOnBackdrop) closeModal();
+      downOnBackdrop = false;
+    });
+  }
+
   function openVideoModal({ type, id }) {
     const src = type === "playlist"
       ? `https://www.youtube.com/embed/videoseries?list=${encodeURIComponent(id)}&autoplay=1`
@@ -1211,7 +1224,7 @@
       </div>
     </div>`;
     document.getElementById("videoModalClose").addEventListener("click", closeModal);
-    document.getElementById("modalBackdrop").addEventListener("click", (e) => { if (e.target.id === "modalBackdrop") closeModal(); });
+    wireBackdropClose(document.getElementById("modalBackdrop"));
   }
 
   function openImageModal(src) {
@@ -1225,7 +1238,7 @@
       </div>
     </div>`;
     document.getElementById("videoModalClose").addEventListener("click", closeModal);
-    document.getElementById("modalBackdrop").addEventListener("click", (e) => { if (e.target.id === "modalBackdrop") closeModal(); });
+    wireBackdropClose(document.getElementById("modalBackdrop"));
   }
   document.addEventListener("keydown", (e) => { if (e.key === "Escape" && $modalRoot.firstElementChild) closeModal(); });
 
@@ -1524,7 +1537,7 @@
       </div>`;
       $modalRoot.innerHTML = modalHtml;
       document.getElementById("f_login_cancel").addEventListener("click", closeModal);
-      document.getElementById("modalBackdrop").addEventListener("click", (e) => { if (e.target.id === "modalBackdrop") closeModal(); });
+      wireBackdropClose(document.getElementById("modalBackdrop"));
       document.getElementById("f_login_submit").addEventListener("click", () => {
         const email = document.getElementById("f_login_email").value.trim();
         const pw = document.getElementById("f_login_pw").value;
