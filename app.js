@@ -14,6 +14,7 @@
   const TRASH_ID = "trash"; // reserved top-level category id: holds categories removed via the UI
   const TRASH_ITEMS_ID = "trash-items"; // reserved sub-category under trash: holds individually-deleted items
   const FAVORITES_ID = "favorites"; // reserved top-level category id: holds copies of starred items
+  const ORIGINAL_CATEGORIES = JSON.parse(JSON.stringify(CATALOG.categories)); // pristine data.js tree, before any custom-category merge
 
   let itemState = loadJSON(LS_STATE, {});
   let customItems = loadJSON(LS_CUSTOM, []);
@@ -76,20 +77,6 @@
     parent.subcategories.push({ id: cc.id, name: cc.name, desc: cc.desc || "", items: [] });
     return true;
   }
-  // apply in multiple passes so a sub-category-of-a-sub-category resolves
-  // regardless of array order (e.g. after an import merge)
-  (function applyAllCustomCategories() {
-    let pending = customCategories.slice();
-    let progressed = true;
-    while (pending.length && progressed) {
-      progressed = false;
-      pending = pending.filter(cc => {
-        if (applyCustomCategoryToCatalog(cc)) { progressed = true; return false; }
-        return true;
-      });
-    }
-  })();
-
   // ── apply any saved drag-and-drop ordering (any ids not saved keep their
   // natural position at the end, so new/default categories still show up) ──
   function applyCategoryOrder(list, parentKey) {
@@ -105,7 +92,6 @@
     }
     list.forEach(entry => { if (entry.subcategories) applyCategoryOrder(entry.subcategories, entry.id); });
   }
-  applyCategoryOrder(CATALOG.categories, "top");
 
   // ── YouTube thumbnail helpers ──────────────────────────────
   function ytVideoId(url) {
@@ -164,8 +150,8 @@
   // ── flatten catalog into a working tree with stable node ids ──
   // node: { id, name, icon, desc, guide, noGuide, path:[...names], parent }
   // each item gets: _cat (top id), _sub (sub id or null), _key (url), featured, warn
-  const nodes = {}; // id -> node meta
-  const allItems = []; // flattened default items
+  let nodes = {}; // id -> node meta
+  let allItems = []; // flattened default items
 
   function starFlag(desc) { return /★/.test(desc || ""); }
 
@@ -183,14 +169,34 @@
     (entry.subcategories || []).forEach(sub => registerNodeTree(sub, entry.id, isTop ? entry.id : topId));
   }
 
-  CATALOG.categories.forEach(cat => registerNodeTree(cat, null, null));
-
   function pushItem(it, catId, subId) {
     allItems.push({
       t: it.t, u: it.u, s: it.s, tags: it.tags || [], d: it.d || "", thumb: it.thumb || null,
       _cat: catId, _sub: subId, featured: starFlag(it.d), custom: false,
     });
   }
+
+  // rebuilds CATALOG.categories/nodes/allItems from scratch: the pristine
+  // data.js tree + customCategories merged in + saved ordering applied.
+  // Called once at startup and again whenever cloud sync brings in a
+  // wholesale remote replace, instead of a disruptive location.reload().
+  function rebuildCatalogTree() {
+    CATALOG.categories = JSON.parse(JSON.stringify(ORIGINAL_CATEGORIES));
+    let pending = customCategories.slice();
+    let progressed = true;
+    while (pending.length && progressed) {
+      progressed = false;
+      pending = pending.filter(cc => {
+        if (applyCustomCategoryToCatalog(cc)) { progressed = true; return false; }
+        return true;
+      });
+    }
+    applyCategoryOrder(CATALOG.categories, "top");
+    nodes = {};
+    allItems = [];
+    CATALOG.categories.forEach(cat => registerNodeTree(cat, null, null));
+  }
+  rebuildCatalogTree();
 
   function registerCategoryNode(cc) {
     if (!cc.parentId) {
@@ -1405,8 +1411,8 @@
       return allMatch;
     }
 
-    function applyRemoteAndReload(remote) {
-      if (remoteMatchesLocal(remote)) return; // nothing actually changed — skip the reload
+    function applyRemoteState(remote) {
+      if (remoteMatchesLocal(remote)) return; // nothing actually changed
       customItems = remote.customItems || [];
       customCategories = remote.customCategories || [];
       hiddenItems = new Set(remote.hiddenItems || []);
@@ -1414,19 +1420,9 @@
       itemState = remote.itemState || {};
       categoryOrder = remote.categoryOrder || {};
       saveCustomRaw(); saveCustomCategoriesRaw(); saveHiddenRaw(); saveHiddenCatsRaw(); saveStateRaw(); saveCategoryOrderRaw();
-      // CATALOG/nodes were built once at page load from the old data, so the
-      // simplest correct way to reflect a wholesale remote replace is a reload —
-      // but throttle it so a persistent mismatch can't reload forever.
-      const GUARD_KEY = "animLib.lastSyncReload";
-      const last = Number(sessionStorage.getItem(GUARD_KEY) || 0);
-      const now = Date.now();
-      if (now - last < 5000) {
-        console.warn("[동기화] 짧은 시간 안에 반복 새로고침이 감지되어 건너뜁니다. 위 로그에서 어떤 필드가 다른지 확인하세요.");
-        renderAll();
-        return;
-      }
-      sessionStorage.setItem(GUARD_KEY, String(now));
-      location.reload();
+      // rebuild CATALOG/nodes/allItems in place from the new state — no reload needed
+      rebuildCatalogTree();
+      renderAll();
     }
 
     // wrap the save* functions once so editor-mode writes push to Firestore;
@@ -1445,7 +1441,7 @@
     docRef.get()
       .then(snap => {
         setStatus("☁ 동기화됨 (읽기 전용)");
-        if (snap.exists) { applyRemoteAndReload(snap.data()); return; }
+        if (snap.exists) { applyRemoteState(snap.data()); return; }
       })
       .then(() => {
         docRef.onSnapshot(snap => {
@@ -1454,7 +1450,7 @@
           if (remote._writerTag === sessionTag) return; // ignore echo of our own write
           if (remoteMatchesLocal(remote)) return; // nothing actually changed
           setStatus(isEditor ? "☁ 새 변경사항 반영 중..." : "☁ 새 변경사항 반영 중... (읽기 전용)");
-          applyRemoteAndReload(remote);
+          applyRemoteState(remote);
         }, err => { console.error("동기화 수신 실패", err); setStatus("☁ 연결 오류"); });
       })
       .catch(err => { console.error("동기화 초기화 실패", err); setStatus("☁ 연결 실패"); });
