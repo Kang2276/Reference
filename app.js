@@ -1162,6 +1162,7 @@
         </div>
         <div class="field"><label>태그 (쉼표로 구분)</label><input id="f_tags" value="${escapeAttr((val.tags||[]).join(", "))}" placeholder="Walk, Idle, Attack"></div>
         <div class="field"><label>썸네일 URL (선택, 유튜브는 자동)</label><input id="f_thumb" value="${escapeAttr(val.thumb || "")}" placeholder="https://..."></div>
+        <div class="field"><label>영상 파일 URL (선택, mp4 등 — 핀터레스트처럼 임베드 안 되는 영상용)</label><input id="f_vfile" value="${escapeAttr(val.vfile || "")}" placeholder="https://.../video.mp4"></div>
         <div class="field"><label>설명</label><textarea id="f_d">${escapeHtml(val.d || "")}</textarea></div>
         <div class="modal-actions">
           <button id="f_cancel">취소</button>
@@ -1183,17 +1184,18 @@
       const s = document.getElementById("f_s").value;
       const tags = document.getElementById("f_tags").value.split(",").map(x => x.trim()).filter(Boolean);
       const thumb = document.getElementById("f_thumb").value.trim() || undefined;
+      const vfile = document.getElementById("f_vfile").value.trim() || undefined;
       const d = document.getElementById("f_d").value.trim();
 
       if (forkKey) {
         // editing a default (non-custom) item: hide the original and save the edit as a custom copy
         hiddenItems.add(forkKey);
         saveHidden();
-        customItems.push({ id: "c" + Date.now() + Math.random().toString(36).slice(2, 7), t, u, s, tags, thumb, vfile: val.vfile || undefined, d, catId, subId: subId || null, createdAt: Date.now() });
+        customItems.push({ id: "c" + Date.now() + Math.random().toString(36).slice(2, 7), t, u, s, tags, thumb, vfile, d, catId, subId: subId || null, createdAt: Date.now() });
       } else if (isEdit) {
-        Object.assign(existing, { t, u, s, tags, thumb, d, catId, subId: subId || null });
+        Object.assign(existing, { t, u, s, tags, thumb, vfile, d, catId, subId: subId || null });
       } else {
-        customItems.push({ id: "c" + Date.now() + Math.random().toString(36).slice(2, 7), t, u, s, tags, thumb, d, catId, subId: subId || null, createdAt: Date.now() });
+        customItems.push({ id: "c" + Date.now() + Math.random().toString(36).slice(2, 7), t, u, s, tags, thumb, vfile, d, catId, subId: subId || null, createdAt: Date.now() });
       }
       saveCustom();
       closeModal();
