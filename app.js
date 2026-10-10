@@ -97,11 +97,12 @@
   function ytVideoId(url) {
     try {
       const u = new URL(url);
-      if (/(^|\.)youtu\.be$/.test(u.hostname)) return u.pathname.slice(1).split("/")[0] || null;
+      const path = u.pathname.replace(/\/+$/, "") || "/"; // tolerate a trailing slash, e.g. /watch/
+      if (/(^|\.)youtu\.be$/.test(u.hostname)) return path.slice(1).split("/")[0] || null;
       if (/(^|\.)youtube\.com$/.test(u.hostname)) {
-        if (u.pathname === "/watch") return u.searchParams.get("v");
-        if (u.pathname.startsWith("/shorts/")) return u.pathname.split("/")[2] || null;
-        if (u.pathname === "/attribution_link") {
+        if (path === "/watch") return u.searchParams.get("v");
+        if (path.startsWith("/shorts/")) return path.split("/")[2] || null;
+        if (path === "/attribution_link") {
           const nested = u.searchParams.get("u");
           if (nested) {
             const nestedParams = new URLSearchParams(nested.split("?")[1] || "");
@@ -115,7 +116,8 @@
   function ytPlaylistId(url) {
     try {
       const u = new URL(url);
-      if (/(^|\.)youtube\.com$/.test(u.hostname) && u.pathname === "/playlist") return u.searchParams.get("list");
+      const path = u.pathname.replace(/\/+$/, "") || "/";
+      if (/(^|\.)youtube\.com$/.test(u.hostname) && path === "/playlist") return u.searchParams.get("list");
     } catch (e) {}
     return null;
   }
@@ -123,8 +125,10 @@
     try {
       const u = new URL(url);
       if (/(^|\.)vimeo\.com$/.test(u.hostname)) {
-        const m = u.pathname.match(/^\/(?:video\/)?(\d+)/);
-        return m ? m[1] : null;
+        // match a path segment that's purely digits (e.g. /123456, /video/123456,
+        // /groups/x/videos/123456) — but not a mixed segment like /user5118261
+        const seg = u.pathname.split("/").find(s => /^\d{5,}$/.test(s));
+        return seg || null;
       }
     } catch (e) {}
     return null;
@@ -793,7 +797,10 @@
     const vid = !isChannelBucket ? ytVideoId(it.u) : null;
     const plId = !vid && !isChannelBucket ? ytPlaylistId(it.u) : null;
     const vimeoId = !vid && !plId && !isChannelBucket ? vimeoVideoId(it.u) : null;
-    const gifSrc = !vid && !plId && !vimeoId && !isChannelBucket && it.thumb && /\.gif(\?|$)/i.test(it.thumb) ? it.thumb : null;
+    // not a recognized video source: if there's at least a thumbnail image,
+    // clicking enlarges it in the lightbox instead of just leaving the site
+    const imageSrc = !vid && !plId && !vimeoId && !isChannelBucket && it.thumb ? it.thumb : null;
+    const isVideo = !!(vid || plId || vimeoId);
     let img = "";
     let attrs = "";
     if (it.thumb) {
@@ -801,7 +808,7 @@
       if (plId) attrs = ` data-playlist-id="${escapeAttr(plId)}"`;
       else if (vid) attrs = ` data-video-id="${escapeAttr(vid)}"`;
       else if (vimeoId) attrs = ` data-vimeo-id="${escapeAttr(vimeoId)}"`;
-      else if (gifSrc) attrs = ` data-gif-src="${escapeAttr(gifSrc)}"`;
+      else if (imageSrc) attrs = ` data-img-src="${escapeAttr(imageSrc)}"`;
     } else if (vid) {
       img = `<img src="https://i.ytimg.com/vi/${escapeAttr(vid)}/mqdefault.jpg" loading="lazy" alt="" onerror="this.remove()">`;
       attrs = ` data-video-id="${escapeAttr(vid)}"`;
@@ -812,7 +819,8 @@
     } else if (vimeoId) {
       attrs = ` data-vimeo-id="${escapeAttr(vimeoId)}"`;
     }
-    return `<div class="card-thumb" data-url="${escapeAttr(it.u)}"${attrs}><span class="thumb-icon">${catIcon}</span>${img}<span class="thumb-play">▶</span></div>`;
+    const overlay = isVideo ? `<span class="thumb-play">▶</span>` : (imageSrc ? `<span class="thumb-play thumb-zoom">🔍</span>` : "");
+    return `<div class="card-thumb" data-url="${escapeAttr(it.u)}"${attrs}><span class="thumb-icon">${catIcon}</span>${img}${overlay}</div>`;
   }
 
   function categoryPathFor(it) {
@@ -895,11 +903,11 @@
         const videoId = el.getAttribute("data-video-id");
         const playlistId = el.getAttribute("data-playlist-id");
         const vimeoId = el.getAttribute("data-vimeo-id");
-        const gifSrc = el.getAttribute("data-gif-src");
+        const imgSrc = el.getAttribute("data-img-src");
         if (videoId) openVideoModal({ type: "video", id: videoId });
         else if (playlistId) openVideoModal({ type: "playlist", id: playlistId });
         else if (vimeoId) openVideoModal({ type: "vimeo", id: vimeoId });
-        else if (gifSrc) openImageModal(gifSrc);
+        else if (imgSrc) openImageModal(imgSrc);
         else window.open(el.getAttribute("data-url"), "_blank", "noopener");
       });
     });

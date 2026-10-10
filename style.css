@@ -207,6 +207,7 @@ input:focus, select:focus, textarea:focus { outline: 1px solid var(--accent); }
   opacity: 0; transform: scale(.85); transition: opacity .15s, transform .15s;
 }
 .card-thumb:hover .thumb-play { opacity: 1; transform: scale(1); }
+.card-thumb .thumb-play.thumb-zoom { padding-left: 0; font-size: 16px; }
 .card-top { display: flex; justify-content: space-between; gap: 8px; align-items: flex-start; margin-top: 10px; }
 .card-title { font-size: 14px; font-weight: 600; line-height: 1.35; }
 .card-title .star { color: var(--accent-2); margin-right: 3px; }
