@@ -2088,8 +2088,7 @@ const CATALOG = {
                 "혼합"
               ],
               "d": "동물,몬스터_애니메이션 핀터레스트 보드.",
-              "thumb": "https://i.pinimg.com/originals/f9/0d/ed/f90deddec9faccc7779d57f42e7225c1.jpg",
-              "vfile": "https://v1.pinimg.com/videos/iht/expMp4/1f/12/92/1f1292f254ece0d46bda7eba85bc2f07_720w.mp4"
+              "thumb": "https://i.pinimg.com/originals/f9/0d/ed/f90deddec9faccc7779d57f42e7225c1.jpg"
             },
             {
               "t": "This perspective focuses on the Indominus Rex outside of its action scenes. Instead of movement driven by chaos, you see controlled posture, spatial awareness, and deliberate behavior. Jurassic World leans into destruction for spectacle, but this video shows that these animals can be more than just a force of chaos.\n\nCredits to @maarten.leys.animator \n\n#indominusrex #jurassicworld #jurassicpark #trex #dinosaur",
@@ -2111,8 +2110,7 @@ const CATALOG = {
                 "혼합"
               ],
               "d": "동물,몬스터_애니메이션 핀터레스트 보드.",
-              "thumb": "https://i.pinimg.com/originals/58/ab/ac/58abaca2e8b5bbd1c292168afcab82c2.jpg",
-              "vfile": "https://v1.pinimg.com/videos/iht/expMp4/9f/05/f1/9f05f11baeb69ded83908a5b56e11629_720w.mp4"
+              "thumb": "https://i.pinimg.com/originals/58/ab/ac/58abaca2e8b5bbd1c292168afcab82c2.jpg"
             },
             {
               "t": "how to draw a t - rex dinosaur step by step",
@@ -2794,8 +2792,7 @@ const CATALOG = {
                 "혼합"
               ],
               "d": "동물,몬스터_애니메이션 핀터레스트 보드.",
-              "thumb": "https://i.pinimg.com/originals/ac/55/35/ac553586cfbe03c9dfd06600cf6fa0f1.jpg",
-              "vfile": "https://v1.pinimg.com/videos/iht/expMp4/70/f8/4e/70f84ee5727f8cddb48bb782d7104f6d_720w.mp4"
+              "thumb": "https://i.pinimg.com/originals/ac/55/35/ac553586cfbe03c9dfd06600cf6fa0f1.jpg"
             },
             {
               "t": "Animating Quads (Jess Morris blog)",
@@ -3631,8 +3628,7 @@ const CATALOG = {
                 "혼합"
               ],
               "d": "동물,몬스터_애니메이션 핀터레스트 보드.",
-              "thumb": "https://i.pinimg.com/originals/51/e5/4a/51e54a949c6dfe84dc1ae38d16f90943.jpg",
-              "vfile": "https://v1.pinimg.com/videos/iht/expMp4/1c/7f/0e/1c7f0e3f142e2b0f2d9a17d7ed6cfb40_720w.mp4"
+              "thumb": "https://i.pinimg.com/originals/51/e5/4a/51e54a949c6dfe84dc1ae38d16f90943.jpg"
             }
           ]
         },
@@ -3893,8 +3889,7 @@ const CATALOG = {
                 "혼합"
               ],
               "d": "동물,몬스터_애니메이션 핀터레스트 보드.",
-              "thumb": "https://i.pinimg.com/originals/97/5b/96/975b963128c366e9fd857a03f783ddd5.jpg",
-              "vfile": "https://v1.pinimg.com/videos/iht/expMp4/5c/79/51/5c7951ff60542b19dfe350e22d56ca19_720w.mp4"
+              "thumb": "https://i.pinimg.com/originals/97/5b/96/975b963128c366e9fd857a03f783ddd5.jpg"
             },
             {
               "t": "a large black dragon standing on top of a sandy beach",
@@ -3905,8 +3900,7 @@ const CATALOG = {
                 "혼합"
               ],
               "d": "동물,몬스터_애니메이션 핀터레스트 보드.",
-              "thumb": "https://i.pinimg.com/originals/8a/03/82/8a0382aa9a8f27cd9f7b1a4df7d114da.jpg",
-              "vfile": "https://v1.pinimg.com/videos/iht/expMp4/9c/9d/b2/9c9db2a033e2257e323718cdc8a5e917_720w.mp4"
+              "thumb": "https://i.pinimg.com/originals/8a/03/82/8a0382aa9a8f27cd9f7b1a4df7d114da.jpg"
             },
             {
               "t": "#birds #bird #nature #birdsofinstagram #wildlife #birdphotography #naturephotography #wildlifephotography #photography #birdwatching #birdlovers #animals #best #birding #of #ig #captures #naturelovers #perfection #love #canon #birdstagram #photooftheday #aves #parrots #nikon #art #instagram #birdlife #brilliance",
@@ -3928,8 +3922,7 @@ const CATALOG = {
                 "혼합"
               ],
               "d": "동물,몬스터_애니메이션 핀터레스트 보드.",
-              "thumb": "https://i.pinimg.com/originals/ff/47/06/ff4706ba4519f5b0a0fc14f05506112e.jpg",
-              "vfile": "https://v1.pinimg.com/videos/iht/expMp4/b3/2a/36/b32a3601b9da80ecec4d6f8efb5eede9_720w.mp4"
+              "thumb": "https://i.pinimg.com/originals/ff/47/06/ff4706ba4519f5b0a0fc14f05506112e.jpg"
             },
             {
               "t": "a large black dragon standing on top of a sandy beach next to the ocean under a cloudy sky",
@@ -3940,8 +3933,7 @@ const CATALOG = {
                 "혼합"
               ],
               "d": "동물,몬스터_애니메이션 핀터레스트 보드.",
-              "thumb": "https://i.pinimg.com/originals/54/32/4b/54324bee3b4857bcf2656ed0b60f66d8.jpg",
-              "vfile": "https://v1.pinimg.com/videos/iht/expMp4/e3/01/5c/e3015cb473eda97aa671bb514b8bfa04_720w.mp4"
+              "thumb": "https://i.pinimg.com/originals/54/32/4b/54324bee3b4857bcf2656ed0b60f66d8.jpg"
             },
             {
               "t": "a drawing of a sailboat with colored lines on the bottom and sides, against a white background",
@@ -3963,8 +3955,7 @@ const CATALOG = {
                 "혼합"
               ],
               "d": "동물,몬스터_애니메이션 핀터레스트 보드.",
-              "thumb": "https://i.pinimg.com/originals/5d/ac/bf/5dacbfcd4988736b474ad8eb43cf2c23.jpg",
-              "vfile": "https://v1.pinimg.com/videos/iht/expMp4/d7/1d/5a/d71d5a26296b6435001d3ccb30cdb923_720w.mp4"
+              "thumb": "https://i.pinimg.com/originals/5d/ac/bf/5dacbfcd4988736b474ad8eb43cf2c23.jpg"
             },
             {
               "t": "a dragon flying through the air with its wings spread out and it's tail extended",
@@ -4524,8 +4515,7 @@ const CATALOG = {
                 "혼합"
               ],
               "d": "동물,몬스터_애니메이션 핀터레스트 보드.",
-              "thumb": "https://i.pinimg.com/originals/79/bb/68/79bb68eb3cab269f7b2d3b784f73e198.jpg",
-              "vfile": "https://v1.pinimg.com/videos/iht/expMp4/38/16/24/381624d716730982b2ba94b57e6a1810_720w.mp4"
+              "thumb": "https://i.pinimg.com/originals/79/bb/68/79bb68eb3cab269f7b2d3b784f73e198.jpg"
             },
             {
               "t": "The alien titan-glider,Celeritas basking in the glory of its epic redesign! #creaturesofsonaria",
@@ -4536,8 +4526,7 @@ const CATALOG = {
                 "혼합"
               ],
               "d": "동물,몬스터_애니메이션 핀터레스트 보드.",
-              "thumb": "https://i.pinimg.com/originals/26/9e/dd/269eddc25ff8619f6ee4075043613883.jpg",
-              "vfile": "https://v1.pinimg.com/videos/iht/expMp4/6c/8e/de/6c8edea197694a1432643ea92656b2e4_720w.mp4"
+              "thumb": "https://i.pinimg.com/originals/26/9e/dd/269eddc25ff8619f6ee4075043613883.jpg"
             },
             {
               "t": "animal stuff",
@@ -5648,8 +5637,7 @@ const CATALOG = {
                 "혼합"
               ],
               "d": "동물,몬스터_애니메이션 핀터레스트 보드.",
-              "thumb": "https://i.pinimg.com/originals/76/38/cb/7638cba24db3f0b527332d9f6b6f1aa3.jpg",
-              "vfile": "https://v1.pinimg.com/videos/iht/expMp4/d7/a0/f8/d7a0f8bf4a6e8824947cffc1059dba11_720w.mp4"
+              "thumb": "https://i.pinimg.com/originals/76/38/cb/7638cba24db3f0b527332d9f6b6f1aa3.jpg"
             },
             {
               "t": "Un archivo desclasificado.  #bestiario #dark #artedigital #cienciaficcion #misterio",
@@ -5671,8 +5659,7 @@ const CATALOG = {
                 "혼합"
               ],
               "d": "동물,몬스터_애니메이션 핀터레스트 보드.",
-              "thumb": "https://i.pinimg.com/originals/fc/36/21/fc362183ca1cf12ca45ca128e8799abd.jpg",
-              "vfile": "https://v1.pinimg.com/videos/iht/expMp4/6d/91/48/6d9148a73a8aa05f7119c4acb9b1e183_720w.mp4"
+              "thumb": "https://i.pinimg.com/originals/fc/36/21/fc362183ca1cf12ca45ca128e8799abd.jpg"
             },
             {
               "t": "3D Character Animation | Animation | Custom Character",
@@ -5727,8 +5714,7 @@ const CATALOG = {
                 "혼합"
               ],
               "d": "동물,몬스터_애니메이션 핀터레스트 보드.",
-              "thumb": "https://i.pinimg.com/originals/00/f8/73/00f873dee19d4ef5f43f74a2fdf02281.jpg",
-              "vfile": "https://v1.pinimg.com/videos/iht/expMp4/0e/45/19/0e45194f290de95b467c7cb63921cce4_720w.mp4"
+              "thumb": "https://i.pinimg.com/originals/00/f8/73/00f873dee19d4ef5f43f74a2fdf02281.jpg"
             },
             {
               "t": "Kyle Dahl",
