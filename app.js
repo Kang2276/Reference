@@ -136,6 +136,21 @@
   function isPinterestUrl(url) {
     try { return /(^|\.)pinterest\.[a-z.]+$/.test(new URL(url).hostname); } catch (e) { return false; }
   }
+  // Facebook's CDN thumbnail URLs carry an "oe" query param: a hex Unix
+  // timestamp marking when that specific signed URL stops working
+  function fbThumbExpiry(thumbUrl) {
+    try {
+      const u = new URL(thumbUrl);
+      if (!/\.fbcdn\.net$/.test(u.hostname)) return null;
+      const oe = u.searchParams.get("oe");
+      if (!oe || !/^[0-9a-fA-F]+$/.test(oe)) return null;
+      const ts = parseInt(oe, 16) * 1000;
+      if (!isFinite(ts)) return null;
+      return new Intl.DateTimeFormat("ko-KR", {
+        timeZone: "Asia/Seoul", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hour12: false,
+      }).format(new Date(ts));
+    } catch (e) { return null; }
+  }
 
   function getState(url) {
     return itemState[url] || { watched: false, favorite: false, note: "" };
@@ -1203,6 +1218,12 @@
         // leave a reminder that the title link is what actually goes to the video
         if (isPinterestUrl(u) && !getState(u).note) {
           setState(u, { note: "제목을 클릭해야 재생" });
+        }
+        // Facebook thumbnail URLs are signed and expire — note when, so a dead
+        // thumbnail later is explained instead of looking like a random bug
+        const fbExp = fbThumbExpiry(thumb);
+        if (fbExp && !getState(u).note) {
+          setState(u, { note: `썸네일 만료 예정: ${fbExp} (한국시간) — 만료되면 새 주소 필요` });
         }
       }
       saveCustom();
