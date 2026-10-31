@@ -907,6 +907,7 @@
         <div class="card-actions">
           ${it._cat === FAVORITES_ID ? "" : `<button class="icon-btn fav-btn ${st.favorite ? "on" : ""}" title="즐겨찾기 (즐겨찾기 카테고리에 복사됨)">${st.favorite ? "⭐" : "☆"}</button>`}
           <span class="source-badge">${escapeHtml(sourceLabel(it))}</span>
+          <button class="icon-btn copy-url-btn" title="URL 복사 (썸네일 찾기 요청용)">🔗</button>
         </div>
         <div class="card-actions">
           ${it._cat === TRASH_ID
@@ -986,6 +987,7 @@
       const url = card.getAttribute("data-url");
       const key = card.getAttribute("data-key");
       const favBtn = card.querySelector(".fav-btn");
+      const copyUrlBtn = card.querySelector(".copy-url-btn");
       const hideBtn = card.querySelector(".hide-btn");
       const editBtn = card.querySelector(".edit-btn");
       const delBtn = card.querySelector(".del-btn");
@@ -1001,6 +1003,18 @@
           if (nowFav) addToFavorites(it); else removeFromFavorites(key);
         }
         renderContent();
+      });
+      if (copyUrlBtn) copyUrlBtn.addEventListener("click", () => {
+        const done = () => {
+          const orig = copyUrlBtn.textContent;
+          copyUrlBtn.textContent = "✓";
+          setTimeout(() => { copyUrlBtn.textContent = orig; }, 1200);
+        };
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(url).then(done).catch(() => alert("복사 실패 — 직접 선택해서 복사해주세요:\n" + url));
+        } else {
+          alert(url);
+        }
       });
       if (hideBtn) hideBtn.addEventListener("click", () => {
         if (confirm("이 레퍼런스를 휴지통으로 이동할까요?")) {
