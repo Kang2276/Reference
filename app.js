@@ -1324,7 +1324,10 @@
         root.id = "fb-root";
         document.body.appendChild(root);
       }
-      window.fbAsyncInit = function () { resolve(window.FB); };
+      window.fbAsyncInit = function () {
+        window.FB.init({ xfbml: false, version: "v19.0" }); // xfbml:false — we call XFBML.parse() ourselves per-modal
+        resolve(window.FB);
+      };
       const script = document.createElement("script");
       script.src = "https://connect.facebook.net/ko_KR/sdk.js#xfbml=1&version=v19.0";
       script.async = true;
