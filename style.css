@@ -187,7 +187,6 @@ input:focus, select:focus, textarea:focus { outline: 1px solid var(--accent); }
   overflow: hidden;
 }
 .card.featured { border-color: var(--accent-2); }
-.card.watched { opacity: .55; }
 .card-thumb {
   position: relative;
   aspect-ratio: 16 / 9;
@@ -224,6 +223,10 @@ input:focus, select:focus, textarea:focus { outline: 1px solid var(--accent); }
 .icon-btn.on { color: var(--accent-2); border-color: var(--accent-2); }
 .icon-btn.restore-btn { color: var(--ok); border-color: var(--ok); }
 .custom-tag { font-size: 10px; color: var(--ok); border: 1px solid var(--ok); padding: 1px 6px; border-radius: 999px; }
+.source-badge {
+  font-size: 10.5px; color: var(--text-faint); border: 1px solid var(--border);
+  padding: 3px 8px; border-radius: 999px; display: inline-flex; align-items: center;
+}
 
 .empty-state { text-align: center; color: var(--text-faint); padding: 60px 20px; font-size: 13px; }
 
@@ -285,7 +288,6 @@ body.guest-mode #importBtn,
 body.guest-mode #importInput,
 body.guest-mode #addCatBtn,
 body.guest-mode .fav-btn,
-body.guest-mode .watch-btn,
 body.guest-mode .move-btn,
 body.guest-mode .edit-btn,
 body.guest-mode .del-btn,

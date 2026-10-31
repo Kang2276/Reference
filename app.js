@@ -529,7 +529,6 @@
     query: "",
     source: "전체",
     featuredOnly: false,
-    unwatchedOnly: false,
     activeTag: null,
     openCats: new Set(CATALOG.categories.map(c => c.id)), // sidebar expand state
   };
@@ -724,7 +723,6 @@
     }
     if (ui.source !== "전체") items = items.filter(it => it.s === ui.source);
     if (ui.featuredOnly) items = items.filter(it => it.featured);
-    if (ui.unwatchedOnly) items = items.filter(it => !getState(it.u).watched);
     if (ui.activeTag) items = items.filter(it => (it.tags || []).includes(ui.activeTag));
     return sortByRecency(items);
   }
@@ -790,8 +788,7 @@
     html += `<div class="grp"><label>소스</label>` + ["전체"].concat(sources).map(s =>
       `<span class="chip ${ui.source === s ? "active" : ""}" data-source="${escapeAttr(s)}">${escapeHtml(s)}</span>`
     ).join("") + `</div>`;
-    html += `<div class="grp"><span class="chip ${ui.featuredOnly ? "active" : ""}" data-featured="1">★ 추천만</span>`
-      + `<span class="chip ${ui.unwatchedOnly ? "active" : ""}" data-unwatched="1">미확인만</span></div>`;
+    html += `<div class="grp"><span class="chip ${ui.featuredOnly ? "active" : ""}" data-featured="1">★ 추천만</span></div>`;
     if (ui.activeTag) html += `<div class="grp"><label>태그</label><span class="chip active" data-cleartag="1">${escapeHtml(ui.activeTag)} ✕</span></div>`;
     html += `</div>`;
 
@@ -871,10 +868,22 @@
     return names.join(" › ");
   }
 
+  function sourceLabel(it) {
+    const isChannelBucket = !!(it._sub && it._sub.endsWith("-channel"));
+    if (!isChannelBucket) {
+      if (ytVideoId(it.u)) return "YouTube";
+      if (ytPlaylistId(it.u)) return "YouTube 재생목록";
+      if (vimeoVideoId(it.u)) return "Vimeo";
+      if (isFacebookVideoUrl(it.u)) return "Facebook";
+      if (isPinterestUrl(it.u)) return "Pinterest";
+    }
+    try { return new URL(it.u).hostname.replace(/^www\./, ""); } catch (e) { return it.s || "기타"; }
+  }
+
   function cardHtml(it) {
     const st = getState(it.u);
     return `
-    <div class="card ${it.featured ? "featured" : ""} ${st.watched ? "watched" : ""}" data-url="${escapeAttr(it.u)}" data-key="${escapeAttr(itemKey(it))}">
+    <div class="card ${it.featured ? "featured" : ""}" data-url="${escapeAttr(it.u)}" data-key="${escapeAttr(itemKey(it))}">
       ${thumbHtml(it)}
       <div class="card-top">
         <div class="card-title">${it.featured ? '<span class="star">★</span>' : ""}<a href="${escapeAttr(it.u)}" target="_blank" rel="noopener">${escapeHtml(it.t)}</a></div>
@@ -887,7 +896,7 @@
       <div class="card-bottom">
         <div class="card-actions">
           ${it._cat === FAVORITES_ID ? "" : `<button class="icon-btn fav-btn ${st.favorite ? "on" : ""}" title="즐겨찾기 (즐겨찾기 카테고리에 복사됨)">${st.favorite ? "⭐" : "☆"}</button>`}
-          <button class="icon-btn watch-btn ${st.watched ? "on" : ""}" title="확인함">${st.watched ? "✔ 확인함" : "확인"}</button>
+          <span class="source-badge">${escapeHtml(sourceLabel(it))}</span>
         </div>
         <div class="card-actions">
           ${it._cat === TRASH_ID
@@ -960,7 +969,6 @@
     });
     $content.querySelectorAll("[data-source]").forEach(el => el.addEventListener("click", () => { ui.source = el.getAttribute("data-source"); renderContent(); }));
     $content.querySelectorAll("[data-featured]").forEach(el => el.addEventListener("click", () => { ui.featuredOnly = !ui.featuredOnly; renderContent(); }));
-    $content.querySelectorAll("[data-unwatched]").forEach(el => el.addEventListener("click", () => { ui.unwatchedOnly = !ui.unwatchedOnly; renderContent(); }));
     $content.querySelectorAll("[data-tag]").forEach(el => el.addEventListener("click", () => { ui.activeTag = el.getAttribute("data-tag"); renderContent(); }));
     $content.querySelectorAll("[data-cleartag]").forEach(el => el.addEventListener("click", () => { ui.activeTag = null; renderContent(); }));
 
@@ -968,7 +976,6 @@
       const url = card.getAttribute("data-url");
       const key = card.getAttribute("data-key");
       const favBtn = card.querySelector(".fav-btn");
-      const watchBtn = card.querySelector(".watch-btn");
       const hideBtn = card.querySelector(".hide-btn");
       const editBtn = card.querySelector(".edit-btn");
       const delBtn = card.querySelector(".del-btn");
@@ -985,7 +992,6 @@
         }
         renderContent();
       });
-      if (watchBtn) watchBtn.addEventListener("click", () => { setState(url, { watched: !getState(url).watched }); renderContent(); });
       if (hideBtn) hideBtn.addEventListener("click", () => {
         if (confirm("이 레퍼런스를 휴지통으로 이동할까요?")) {
           const it = renderedByKey.get(key);
