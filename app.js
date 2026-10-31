@@ -157,6 +157,16 @@
       return /(^|\.)facebook\.com$/.test(h) || h === "fb.watch" || h === "m.facebook.com";
     } catch (e) { return false; }
   }
+  // a YouTube *channel* page (not a specific video) can't be embedded/played —
+  // detected from the URL shape itself, not from which category it's filed under
+  function isYouTubeChannelUrl(url) {
+    try {
+      const u = new URL(url);
+      if (!/(^|\.)youtube\.com$/.test(u.hostname)) return false;
+      const p = u.pathname.replace(/\/+$/, "") || "/";
+      return p.startsWith("/channel/") || p.startsWith("/c/") || p.startsWith("/user/") || p.startsWith("/@");
+    } catch (e) { return false; }
+  }
 
   function getState(url) {
     return itemState[url] || { watched: false, favorite: false, note: "" };
@@ -814,7 +824,7 @@
 
   function thumbHtml(it) {
     const catIcon = (nodes[it._cat] && nodes[it._cat].icon) || "🎬";
-    const isChannelBucket = !!(it._sub && it._sub.endsWith("-channel"));
+    const isChannelBucket = isYouTubeChannelUrl(it.u);
     const vid = !isChannelBucket ? ytVideoId(it.u) : null;
     const plId = !vid && !isChannelBucket ? ytPlaylistId(it.u) : null;
     const vimeoId = !vid && !plId && !isChannelBucket ? vimeoVideoId(it.u) : null;
@@ -869,7 +879,7 @@
   }
 
   function sourceLabel(it) {
-    const isChannelBucket = !!(it._sub && it._sub.endsWith("-channel"));
+    const isChannelBucket = isYouTubeChannelUrl(it.u);
     if (!isChannelBucket) {
       if (ytVideoId(it.u)) return "YouTube";
       if (ytPlaylistId(it.u)) return "YouTube 재생목록";
