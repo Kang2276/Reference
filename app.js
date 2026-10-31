@@ -903,7 +903,6 @@
         <div class="card-actions">
           ${it._cat === FAVORITES_ID ? "" : `<button class="icon-btn fav-btn ${st.favorite ? "on" : ""}" title="즐겨찾기 (즐겨찾기 카테고리에 복사됨)">${st.favorite ? "⭐" : "☆"}</button>`}
           <span class="source-badge">${escapeHtml(sourceLabel(it))}</span>
-          <button class="icon-btn copy-url-btn" title="URL 복사 (썸네일 찾기 요청용)">🔗</button>
         </div>
         <div class="card-actions">
           ${it._cat === TRASH_ID
@@ -911,6 +910,7 @@
             : `<button class="icon-btn move-btn" title="다른 카테고리로 이동">➜ 이동</button>`
               + (it.custom ? `<button class="icon-btn edit-btn" data-id="${it.customId}" title="편집">✎ 수정</button><button class="icon-btn danger del-btn" data-id="${it.customId}" title="삭제">🗑 삭제</button>`
                             : `<button class="icon-btn edit-btn" title="편집">✎ 수정</button><button class="icon-btn danger hide-btn" title="삭제">🗑 삭제</button>`)}
+          <button class="icon-btn copy-url-btn" title="URL 복사 (썸네일 찾기 요청용)">🔗</button>
         </div>
       </div>
     </div>`;
