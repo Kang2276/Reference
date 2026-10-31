@@ -133,6 +133,9 @@
     } catch (e) {}
     return null;
   }
+  function isPinterestUrl(url) {
+    try { return /(^|\.)pinterest\.[a-z.]+$/.test(new URL(url).hostname); } catch (e) { return false; }
+  }
 
   function getState(url) {
     return itemState[url] || { watched: false, favorite: false, note: "" };
@@ -1196,6 +1199,11 @@
         Object.assign(existing, { t, u, s, tags, thumb, vfile, d, catId, subId: subId || null });
       } else {
         customItems.push({ id: "c" + Date.now() + Math.random().toString(36).slice(2, 7), t, u, s, tags, thumb, vfile, d, catId, subId: subId || null, createdAt: Date.now() });
+        // Pinterest items only show an enlargeable thumbnail, not a video popup —
+        // leave a reminder that the title link is what actually goes to the video
+        if (isPinterestUrl(u) && !getState(u).note) {
+          setState(u, { note: "제목을 클릭해야 재생" });
+        }
       }
       saveCustom();
       closeModal();
