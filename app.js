@@ -480,7 +480,7 @@
     return allItems.concat(customItems.map(c => ({
       t: c.t, u: c.u, s: c.s, tags: c.tags || [], d: c.d || "", thumb: c.thumb || null, vfile: c.vfile || null,
       _cat: c.catId, _sub: c.subId || null, featured: starFlag(c.d),
-      custom: true, customId: c.id,
+      custom: true, customId: c.id, createdAt: c.createdAt || 0,
     })));
   }
   function itemKey(it) {
