@@ -151,6 +151,12 @@
       }).format(new Date(ts));
     } catch (e) { return null; }
   }
+  function isFacebookVideoUrl(url) {
+    try {
+      const h = new URL(url).hostname;
+      return /(^|\.)facebook\.com$/.test(h) || h === "fb.watch" || h === "m.facebook.com";
+    } catch (e) { return false; }
+  }
 
   function getState(url) {
     return itemState[url] || { watched: false, favorite: false, note: "" };
@@ -817,10 +823,13 @@
     const vimeoId = !vid && !plId && !isChannelBucket ? vimeoVideoId(it.u) : null;
     // a directly-playable video file (e.g. extracted from a Pinterest pin) we host no embed for
     const directVideo = !vid && !plId && !vimeoId && !isChannelBucket && it.vfile ? it.vfile : null;
+    // Facebook has an official oEmbed widget (CORS-open, no token needed) but it
+    // only gives an embeddable SDK widget, not a thumbnail_url — handled on click
+    const isFb = !vid && !plId && !vimeoId && !directVideo && !isChannelBucket && isFacebookVideoUrl(it.u);
     // not a recognized video source: if there's at least a thumbnail image,
     // clicking enlarges it in the lightbox instead of just leaving the site
-    const imageSrc = !vid && !plId && !vimeoId && !directVideo && !isChannelBucket && it.thumb ? it.thumb : null;
-    const isVideo = !!(vid || plId || vimeoId || directVideo);
+    const imageSrc = !vid && !plId && !vimeoId && !directVideo && !isFb && !isChannelBucket && it.thumb ? it.thumb : null;
+    const isVideo = !!(vid || plId || vimeoId || directVideo || isFb);
     let img = "";
     let attrs = "";
     if (it.thumb) {
@@ -829,6 +838,7 @@
       else if (vid) attrs = ` data-video-id="${escapeAttr(vid)}"`;
       else if (vimeoId) attrs = ` data-vimeo-id="${escapeAttr(vimeoId)}"`;
       else if (directVideo) attrs = ` data-vfile="${escapeAttr(directVideo)}"`;
+      else if (isFb) attrs = ` data-fb-url="${escapeAttr(it.u)}"`;
       else if (imageSrc) attrs = ` data-img-src="${escapeAttr(imageSrc)}"`;
     } else if (vid) {
       img = `<img src="https://i.ytimg.com/vi/${escapeAttr(vid)}/mqdefault.jpg" loading="lazy" alt="" onerror="this.remove()">`;
@@ -843,6 +853,8 @@
       attrs = ` data-vimeo-url="${escapeAttr(it.u)}" data-vimeo-id="${escapeAttr(vimeoId)}"`;
     } else if (directVideo) {
       attrs = ` data-vfile="${escapeAttr(directVideo)}"`;
+    } else if (isFb) {
+      attrs = ` data-fb-url="${escapeAttr(it.u)}"`;
     }
     const overlay = isVideo ? `<span class="thumb-play">▶</span>` : (imageSrc ? `<span class="thumb-play thumb-zoom">🔍</span>` : "");
     return `<div class="card-thumb" data-url="${escapeAttr(it.u)}"${attrs}><span class="thumb-icon">${catIcon}</span>${img}${overlay}</div>`;
@@ -934,12 +946,14 @@
         const playlistId = el.getAttribute("data-playlist-id");
         const vimeoId = el.getAttribute("data-vimeo-id");
         const vfile = el.getAttribute("data-vfile");
+        const fbUrl = el.getAttribute("data-fb-url");
         const imgSrc = el.getAttribute("data-img-src");
         const origUrl = el.getAttribute("data-url");
         if (videoId) openVideoModal({ type: "video", id: videoId, origUrl });
         else if (playlistId) openVideoModal({ type: "playlist", id: playlistId, origUrl });
         else if (vimeoId) openVideoModal({ type: "vimeo", id: vimeoId, origUrl });
         else if (vfile) openNativeVideoModal(vfile, origUrl);
+        else if (fbUrl) openFacebookVideoModal(fbUrl);
         else if (imgSrc) openImageModal(imgSrc);
         else window.open(el.getAttribute("data-url"), "_blank", "noopener");
       });
@@ -1296,6 +1310,52 @@
     </div>`;
     document.getElementById("videoModalClose").addEventListener("click", closeModal);
     wireBackdropClose(document.getElementById("modalBackdrop"));
+  }
+
+  // Facebook's official oEmbed-based SDK widget — CORS-open, no access token
+  // needed, loaded once and reused for every Facebook video popup
+  let fbSdkPromise = null;
+  function loadFacebookSdk() {
+    if (fbSdkPromise) return fbSdkPromise;
+    fbSdkPromise = new Promise((resolve, reject) => {
+      if (window.FB) { resolve(window.FB); return; }
+      if (!document.getElementById("fb-root")) {
+        const root = document.createElement("div");
+        root.id = "fb-root";
+        document.body.appendChild(root);
+      }
+      window.fbAsyncInit = function () { resolve(window.FB); };
+      const script = document.createElement("script");
+      script.src = "https://connect.facebook.net/ko_KR/sdk.js#xfbml=1&version=v19.0";
+      script.async = true;
+      script.defer = true;
+      script.crossOrigin = "anonymous";
+      script.onerror = () => reject(new Error("Facebook SDK 로드 실패"));
+      document.body.appendChild(script);
+    });
+    return fbSdkPromise;
+  }
+  function openFacebookVideoModal(url) {
+    $modalRoot.innerHTML = `
+    <div class="modal-backdrop" id="modalBackdrop">
+      <div class="modal video-modal">
+        <button class="icon-btn video-modal-close" id="videoModalClose" title="닫기">✕</button>
+        <a class="video-modal-origlink" href="${escapeAttr(url)}" target="_blank" rel="noopener" title="원본 사이트에서 열기">🔗 원본에서 보기</a>
+        <div class="video-modal-frame" id="fbVideoFrame" style="display:flex;align-items:center;justify-content:center;">
+          <div class="fb-video" data-href="${escapeAttr(url)}" data-width="auto" data-autoplay="true" data-allowfullscreen="true"></div>
+        </div>
+      </div>
+    </div>`;
+    document.getElementById("videoModalClose").addEventListener("click", closeModal);
+    wireBackdropClose(document.getElementById("modalBackdrop"));
+    loadFacebookSdk().then(FB => {
+      const frame = document.getElementById("fbVideoFrame");
+      if (frame) FB.XFBML.parse(frame);
+    }).catch(err => {
+      console.error("Facebook SDK 로드 실패", err);
+      const frame = document.getElementById("fbVideoFrame");
+      if (frame) frame.innerHTML = `<div style="color:#fff;padding:20px;text-align:center;font-size:13px;">페이스북 영상을 불러오지 못했습니다.<br>위 "🔗 원본에서 보기"를 이용해주세요.</div>`;
+    });
   }
   document.addEventListener("keydown", (e) => { if (e.key === "Escape" && $modalRoot.firstElementChild) closeModal(); });
 
